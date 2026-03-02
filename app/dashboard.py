@@ -28,7 +28,8 @@ from src.visualization import (
     role_distribution_chart,
     generate_wordcloud,
     hourly_heatmap,
-    sentiment_trend_chart
+    sentiment_trend_chart,
+    message_length_distribution
 )
 from src.nlp import add_sentiment_to_df, cluster_topics
 
@@ -100,27 +101,31 @@ if uploaded_file:
             # --- ROW 2: ACTIVITY OVER TIME ---
             c1, c2 = st.columns([2, 1])
             with c1:
-                st.plotly_chart(activity_line_chart(df), use_container_width=True)
+                st.plotly_chart(activity_line_chart(df, theme=theme), use_container_width=True)
             with c2:
-                st.plotly_chart(role_distribution_chart(df), use_container_width=True)
+                st.plotly_chart(role_distribution_chart(df, theme=theme), use_container_width=True)
 
             # --- ROW 3: HEATMAP & WORDCLOUD ---
             st.markdown("### 🧬 Content Patterns")
             col_a, col_b = st.columns(2)
             with col_a:
                 pivot = activity_heatmap_data(df)
-                st.plotly_chart(hourly_heatmap(pivot), use_container_width=True)
+                st.plotly_chart(hourly_heatmap(pivot, theme=theme), use_container_width=True)
             with col_b:
                 st.write("#### Most Frequent Terms")
-                fig_wc = generate_wordcloud(df)
+                fig_wc = generate_wordcloud(df, theme=theme)
                 st.pyplot(fig_wc)
+
+            # --- ROW 3.5: NEW FEATURE ---
+            st.markdown("### 📏 Message Analytics")
+            st.plotly_chart(message_length_distribution(df, theme=theme), use_container_width=True)
 
             # --- ROW 4: NLP INSIGHTS ---
             st.markdown("### 🧠 Advanced Insights")
             col_x, col_y = st.columns(2)
             
             with col_x:
-                sent_fig = sentiment_trend_chart(df)
+                sent_fig = sentiment_trend_chart(df, theme=theme)
                 if sent_fig:
                     st.plotly_chart(sent_fig, use_container_width=True)
             
