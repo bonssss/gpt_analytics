@@ -1,5 +1,13 @@
 
 import streamlit as st
+
+st.set_page_config(
+    page_title="ChatGPT Intelligence Dashboard",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 import pandas as pd
 import sys
 import os
@@ -34,12 +42,7 @@ from src.visualization import (
 from src.nlp import add_sentiment_to_df, cluster_topics
 
 # --- PAGE CONFIG ---
-st.set_page_config(
-    page_title="ChatGPT Intelligence Dashboard",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+
 
 # --- CUSTOM STYLING ---
 st.markdown("""
