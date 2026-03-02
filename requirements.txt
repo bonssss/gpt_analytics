@@ -1,10 +1,11 @@
+streamlit==1.35.0
+altair==5.3.0
 
 pandas
 numpy
 matplotlib
 seaborn
 plotly
-streamlit
 scikit-learn
 wordcloud
 textblob
