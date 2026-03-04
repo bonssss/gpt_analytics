@@ -104,7 +104,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- MAIN CONTENT ---
-st.markdown("<h1 class='title-text'>🧠 ChatGPT Analytics</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='title-text'> ChatGPT Analytics</h1>", unsafe_allow_html=True)
 st.markdown("<p class='subtitle-text'>Unlock insights and deep patterns from your conversation history</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload ChatGPT Export (JSON) directly below", type=["json"])
