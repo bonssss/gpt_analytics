@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+import time
 from datetime import datetime
 
 # Set page configuration as first Streamlit command
@@ -418,6 +419,61 @@ if current_theme == "Dark":
             color: #38BDF8 !important;
         }
 
+        /* Loading & Processing Screen (Dark Mode) */
+        .loading-card {
+            background-color: #10141E;
+            border: 1px solid #1E2638;
+            border-radius: 12px;
+            padding: 2.25rem 2rem;
+            max-width: 620px;
+            margin: 2.5rem auto 1.5rem auto;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+        }
+        .loading-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #F8FAFC !important;
+            margin: 0.85rem 0 0.4rem 0;
+        }
+        .loading-desc {
+            font-size: 0.9rem;
+            color: #94A3B8 !important;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+        .loading-step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 1.25rem 0 0.5rem 0;
+            text-align: left;
+        }
+        .loading-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 15px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            border: 1px solid #1E293B;
+            background-color: #141A28;
+            color: #94A3B8;
+            transition: all 0.2s ease;
+        }
+        .loading-step.active {
+            border-color: #0284C7 !important;
+            background-color: #0F2338 !important;
+            color: #38BDF8 !important;
+            font-weight: 600 !important;
+        }
+        .loading-step.done {
+            border-color: #059669 !important;
+            background-color: #06281E !important;
+            color: #34D399 !important;
+            font-weight: 600 !important;
+        }
+
         /* Responsive Media Queries */
         @media (max-width: 768px) {
             .landing-hero {
@@ -810,6 +866,61 @@ else:
             color: #0284C7 !important;
         }
 
+        /* Loading & Processing Screen (Light Mode) */
+        .loading-card {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 2.25rem 2rem;
+            max-width: 620px;
+            margin: 2.5rem auto 1.5rem auto;
+            text-align: center;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+        }
+        .loading-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #0F172A !important;
+            margin: 0.85rem 0 0.4rem 0;
+        }
+        .loading-desc {
+            font-size: 0.9rem;
+            color: #64748B !important;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+        .loading-step-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 1.25rem 0 0.5rem 0;
+            text-align: left;
+        }
+        .loading-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 11px 15px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            border: 1px solid #E2E8F0;
+            background-color: #F8FAFC;
+            color: #64748B;
+            transition: all 0.2s ease;
+        }
+        .loading-step.active {
+            border-color: #0284C7 !important;
+            background-color: #EFF6FF !important;
+            color: #0284C7 !important;
+            font-weight: 600 !important;
+        }
+        .loading-step.done {
+            border-color: #10B981 !important;
+            background-color: #ECFDF5 !important;
+            color: #047857 !important;
+            font-weight: 600 !important;
+        }
+
         /* Responsive Media Queries */
         @media (max-width: 768px) {
             .landing-hero {
@@ -1003,29 +1114,128 @@ if st.session_state.active_tab == "Home":
 
 
 # ==============================================================================
-# VIEW 2: ANALYTICS DASHBOARD
+# VIEW 2: ANALYTICS DASHBOARD (WITH STEP-BY-STEP LOADING EXPERIENCE)
 # ==============================================================================
 else:
-    # Resolve dataset
-    if st.session_state.data_mode == "Demo Dataset":
-        df = load_and_enrich_data(None, is_demo=True)
-    elif st.session_state.uploaded_file_bytes is not None:
-        df = load_and_enrich_data(st.session_state.uploaded_file_bytes, is_demo=False)
-    else:
-        df = load_and_enrich_data(None, is_demo=True)
+    # Build unique dataset cache key
+    current_data_key = f"{st.session_state.data_mode}_{len(st.session_state.uploaded_file_bytes) if st.session_state.uploaded_file_bytes is not None else 'demo'}"
 
-    if df.empty:
-        st.warning("No data found or failed to parse JSON file. Switch to Demo mode or upload a valid conversations.json.")
-        col_fb1, col_fb2 = st.columns(2)
-        with col_fb1:
-            if st.button("🚀 Load Demo Dataset", type="primary"):
-                st.session_state.data_mode = "Demo Dataset"
-                st.rerun()
-        with col_fb2:
-            if st.button("📁 Return to Upload Screen"):
-                st.session_state.active_tab = "Home"
-                st.rerun()
-        st.stop()
+    # If data has not been processed for this dataset, show Loading Screen
+    if "cached_df" not in st.session_state or st.session_state.get("cached_df_key") != current_data_key:
+        loading_placeholder = st.empty()
+        
+        def render_loading_card(step_index):
+            steps = [
+                ("📥", "Parsing ChatGPT JSON Export", "Ingesting conversation tree structure, metadata & message nodes"),
+                ("⚡", "Calculating Activity & Metrics", "Aggregating response lengths, token estimates & habit streaks"),
+                ("🧠", "Running NLP Sentiment & Discovery", "Extracting keyword phrases, sentiment polarity & code blocks"),
+                ("✨", "Finalizing Analytics Suite", "Preparing interactive timelines, heatmaps and charts")
+            ]
+            steps_html = ""
+            for i, (icon, title, desc) in enumerate(steps):
+                if i < step_index:
+                    cls = "loading-step done"
+                    badge = "✓"
+                elif i == step_index:
+                    cls = "loading-step active"
+                    badge = icon
+                else:
+                    cls = "loading-step"
+                    badge = "○"
+                steps_html += f"""
+                    <div class="{cls}">
+                        <div style="font-size: 1.15rem; width: 26px; text-align: center; flex-shrink: 0;">{badge}</div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.92rem; font-weight: 600; color: inherit;">{title}</div>
+                            <div style="font-size: 0.78rem; opacity: 0.85; margin-top: 1px; color: inherit;">{desc}</div>
+                        </div>
+                    </div>
+                """
+            
+            icon_box_bg = "#1E293B" if current_theme == "Dark" else "#EFF6FF"
+            icon_box_border = "#334155" if current_theme == "Dark" else "#BFDBFE"
+            icon_box_color = "#38BDF8" if current_theme == "Dark" else "#0284C7"
+            
+            return f"""
+                <div class="loading-card">
+                    <div style="width: 48px; height: 48px; margin: 0 auto; background-color: {icon_box_bg}; border: 1px solid {icon_box_border}; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: {icon_box_color};">⚡</div>
+                    <h2 class="loading-title">Analyzing Your ChatGPT History</h2>
+                    <p class="loading-desc">Please wait while your export is parsed, enriched with sentiment metrics, and structured for visualization.</p>
+                    <div class="loading-step-list">
+                        {steps_html}
+                    </div>
+                </div>
+            """
+
+        with loading_placeholder.container():
+            card_ph = st.empty()
+            progress_ph = st.progress(0.15)
+            
+            # Step 1: Parse
+            card_ph.markdown(render_loading_card(0), unsafe_allow_html=True)
+            time.sleep(0.2)
+            
+            if st.session_state.data_mode == "Demo Dataset" or st.session_state.uploaded_file_bytes is None:
+                raw_df = generate_sample_chat_data()
+            else:
+                raw_df = load_chatgpt_export(st.session_state.uploaded_file_bytes)
+
+            if raw_df.empty:
+                loading_placeholder.empty()
+                st.warning("No valid conversation data found in the uploaded file. Please verify it is a valid ChatGPT export (conversations.json).")
+                col_fb1, col_fb2 = st.columns(2)
+                with col_fb1:
+                    if st.button("🚀 Load Demo Dataset", type="primary", use_container_width=True):
+                        st.session_state.data_mode = "Demo Dataset"
+                        st.session_state.active_tab = "Dashboard"
+                        st.rerun()
+                with col_fb2:
+                    if st.button("📁 Return to Upload Screen", use_container_width=True):
+                        st.session_state.active_tab = "Home"
+                        st.rerun()
+                st.stop()
+
+            # Step 2: Metrics computation
+            progress_ph.progress(0.50)
+            card_ph.markdown(render_loading_card(1), unsafe_allow_html=True)
+            time.sleep(0.25)
+
+            # Step 3: NLP analysis
+            progress_ph.progress(0.80)
+            card_ph.markdown(render_loading_card(2), unsafe_allow_html=True)
+            enriched_df = add_sentiment_to_df(raw_df)
+            time.sleep(0.25)
+
+            # Step 4: Ready
+            progress_ph.progress(1.0)
+            card_ph.markdown(render_loading_card(3), unsafe_allow_html=True)
+            time.sleep(0.3)
+
+            st.session_state.cached_df = enriched_df
+            st.session_state.cached_df_key = current_data_key
+            loading_placeholder.empty()
+            st.rerun()
+
+    df = st.session_state.cached_df
+
+    # Active Dataset Header & Source Bar
+    dataset_label = "Demo Sample (100 mock messages)" if st.session_state.data_mode == "Demo Dataset" else f"Uploaded Export ({len(df['conversation_id'].unique())} conversations)"
+    badge_bg = "#1E293B" if current_theme == "Dark" else "#EFF6FF"
+    badge_border = "#334155" if current_theme == "Dark" else "#BFDBFE"
+    badge_color = "#38BDF8" if current_theme == "Dark" else "#0284C7"
+    
+    st.markdown(f"""
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 6px 14px; background-color: {badge_bg}; border: 1px solid {badge_border}; border-radius: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 0.84rem;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #10B981;"></span>
+                <span style="font-weight: 600; color: {badge_color};">Active Dataset:</span>
+                <span style="opacity: 0.9;">{dataset_label}</span>
+            </div>
+            <div style="font-size: 0.8rem; opacity: 0.75;">
+                {df['message_time'].min().strftime('%b %d, %Y')} &ndash; {df['message_time'].max().strftime('%b %d, %Y')}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     # --- TOP TOOLBAR FILTERS (RESPONSIVE INLINE) ---
     min_date = df["message_time"].min().date()
