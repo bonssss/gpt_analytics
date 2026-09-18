@@ -56,9 +56,9 @@ from src.visualization import (
     code_languages_chart
 )
 
-# Session State Initialization
-if "nav_page" not in st.session_state:
-    st.session_state.nav_page = "🏠 Home & Upload"
+# --- SESSION STATE INITIALIZATION ---
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "Home"
 if "data_mode" not in st.session_state:
     st.session_state.data_mode = "Demo Dataset"
 if "theme" not in st.session_state:
@@ -67,11 +67,11 @@ if "uploaded_file_bytes" not in st.session_state:
     st.session_state.uploaded_file_bytes = None
 
 # --- TOP NAVBAR HEADER ---
-nav_col1, nav_col2, nav_col3 = st.columns([2.2, 1.8, 1.0])
+nav_col1, nav_col2, nav_col3 = st.columns([2.2, 1.8, 0.9])
 
 with nav_col1:
     st.markdown("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 2px;">
             <div style="background-color: #1E293B; border: 1px solid #334155; border-radius: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem;">⚡</div>
             <div>
                 <span style="font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em;">GPT Analytics</span>
@@ -80,13 +80,17 @@ with nav_col1:
     """, unsafe_allow_html=True)
 
 with nav_col2:
-    st.radio(
-        "Navigation",
-        ["🏠 Home & Upload", "📊 Analytics Dashboard"],
-        key="nav_page",
-        horizontal=True,
-        label_visibility="collapsed"
-    )
+    btn_home_col, btn_dash_col = st.columns(2)
+    with btn_home_col:
+        is_home = (st.session_state.active_tab == "Home")
+        if st.button("🏠 Home & Upload", type="primary" if is_home else "secondary", use_container_width=True):
+            st.session_state.active_tab = "Home"
+            st.rerun()
+    with btn_dash_col:
+        is_dash = (st.session_state.active_tab == "Dashboard")
+        if st.button("📊 Dashboard", type="primary" if is_dash else "secondary", use_container_width=True):
+            st.session_state.active_tab = "Dashboard"
+            st.rerun()
 
 with nav_col3:
     theme = st.selectbox(
@@ -529,7 +533,7 @@ def load_and_enrich_data(file_bytes_or_none, is_demo=False):
 # ==============================================================================
 # VIEW 1: CLEAN RESPONSIVE LANDING PAGE
 # ==============================================================================
-if st.session_state.nav_page == "🏠 Home & Upload":
+if st.session_state.active_tab == "Home":
     
     # Hero Section
     st.markdown("""
@@ -560,7 +564,7 @@ if st.session_state.nav_page == "🏠 Home & Upload":
         """, unsafe_allow_html=True)
         if st.button("🚀 Launch Live Demo", use_container_width=True, type="primary"):
             st.session_state.data_mode = "Demo Dataset"
-            st.session_state.nav_page = "📊 Analytics Dashboard"
+            st.session_state.active_tab = "Dashboard"
             st.rerun()
 
     with cta_col2:
@@ -582,7 +586,7 @@ if st.session_state.nav_page == "🏠 Home & Upload":
         if uploaded_landing_file is not None:
             st.session_state.uploaded_file_bytes = uploaded_landing_file.getvalue()
             st.session_state.data_mode = "Upload Export (.json)"
-            st.session_state.nav_page = "📊 Analytics Dashboard"
+            st.session_state.active_tab = "Dashboard"
             st.rerun()
 
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
@@ -668,7 +672,7 @@ else:
                 st.rerun()
         with col_fb2:
             if st.button("📁 Return to Upload Screen"):
-                st.session_state.nav_page = "🏠 Home & Upload"
+                st.session_state.active_tab = "Home"
                 st.rerun()
         st.stop()
 

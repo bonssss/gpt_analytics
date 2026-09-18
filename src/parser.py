@@ -1,5 +1,6 @@
 import json
 import re
+import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -24,24 +25,41 @@ def extract_message_text(content_data):
                 text_content.append(str(part["content"]))
     return "\n".join(text_content).strip()
 
-def load_chatgpt_export(file):
+def load_chatgpt_export(file_input):
     """
     Parses ChatGPT export JSON (conversations.json) and returns a structured DataFrame.
+    Accepts: bytes, file-like object, JSON string, list/dict of parsed JSON, or file path.
     """
+    data = None
     try:
-        if hasattr(file, "read"):
-            content = file.read()
+        if isinstance(file_input, (list, dict)):
+            data = file_input
+        elif isinstance(file_input, bytes):
+            text = file_input.decode("utf-8", errors="ignore")
+            data = json.loads(text)
+        elif hasattr(file_input, "read"):
+            content = file_input.read()
             if isinstance(content, bytes):
                 content = content.decode("utf-8", errors="ignore")
             data = json.loads(content)
-        elif isinstance(file, str):
-            with open(file, "r", encoding="utf-8", errors="ignore") as f:
-                data = json.load(f)
-        else:
-            return pd.DataFrame()
+        elif isinstance(file_input, str):
+            stripped = file_input.strip()
+            if stripped.startswith("[") or stripped.startswith("{"):
+                data = json.loads(stripped)
+            elif os.path.exists(file_input):
+                with open(file_input, "r", encoding="utf-8", errors="ignore") as f:
+                    data = json.load(f)
+            else:
+                data = json.loads(file_input)
     except Exception as e:
-        logging.error(f"Failed to load JSON: {e}")
+        logging.error(f"Failed to load JSON data: {e}")
         return pd.DataFrame()
+
+    if data is None:
+        return pd.DataFrame()
+
+    if isinstance(data, dict):
+        data = [data]
 
     if not isinstance(data, list):
         return pd.DataFrame()
@@ -49,21 +67,32 @@ def load_chatgpt_export(file):
     records = []
 
     for conv in data:
-        conv_id = conv.get("id", "")
+        if not isinstance(conv, dict):
+            continue
+
+        conv_id = conv.get("id") or conv.get("conversation_id") or ""
         title = conv.get("title") or "Untitled Conversation"
         conv_create_time = conv.get("create_time")
         if conv_create_time:
-            conv_create_time = datetime.fromtimestamp(conv_create_time)
+            try:
+                conv_create_time = datetime.fromtimestamp(float(conv_create_time))
+            except Exception:
+                conv_create_time = None
             
         mapping = conv.get("mapping", {})
+        if not isinstance(mapping, dict):
+            continue
         
         for node_id, node in mapping.items():
+            if not isinstance(node, dict):
+                continue
+
             message = node.get("message")
-            if not message:
+            if not message or not isinstance(message, dict):
                 continue
 
             author = message.get("author", {})
-            role = author.get("role", "unknown")
+            role = author.get("role", "unknown") if isinstance(author, dict) else "unknown"
             # Only keep standard user, assistant, system or tool roles
             if role not in ["user", "assistant", "system", "tool"]:
                 continue
@@ -76,7 +105,10 @@ def load_chatgpt_export(file):
 
             msg_time = message.get("create_time")
             if msg_time:
-                msg_time = datetime.fromtimestamp(msg_time)
+                try:
+                    msg_time = datetime.fromtimestamp(float(msg_time))
+                except Exception:
+                    msg_time = conv_create_time or datetime.now()
             elif conv_create_time:
                 msg_time = conv_create_time
             else:
@@ -93,7 +125,9 @@ def load_chatgpt_export(file):
             
             # Model name if available
             metadata = message.get("metadata", {})
-            model_slug = metadata.get("model_slug", "Default")
+            model_slug = "Default"
+            if isinstance(metadata, dict):
+                model_slug = metadata.get("model_slug") or metadata.get("default_model_slug") or "Default"
 
             records.append({
                 "conversation_id": conv_id,
