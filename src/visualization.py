@@ -1,87 +1,322 @@
 import plotly.express as px
 import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-import seaborn as sns
-from wordcloud import WordCloud
 import pandas as pd
 
-def get_template(theme):
-    return "plotly_dark" if theme == "Dark" else "plotly_white"
+THEME_CONFIG = {
+    "Dark": {
+        "text": "#E2E8F0",
+        "subtext": "#94A3B8",
+        "card_bg": "#111827",
+        "border": "#1F2937",
+        "grid": "#1F2937",
+        "primary": "#38BDF8",      # Sky 400
+        "secondary": "#34D399",    # Emerald 400
+        "accent": "#818CF8",       # Indigo 400
+        "warning": "#FBBF24",      # Amber 400
+        "danger": "#F87171",       # Red 400
+        "neutral": "#64748B",
+        "bar_sequence": ["#38BDF8", "#34D399", "#818CF8", "#FBBF24", "#F472B6", "#A78BFA"]
+    },
+    "Light": {
+        "text": "#0F172A",
+        "subtext": "#64748B",
+        "card_bg": "#FFFFFF",
+        "border": "#E2E8F0",
+        "grid": "#F1F5F9",
+        "primary": "#0284C7",      # Sky 600
+        "secondary": "#059669",    # Emerald 600
+        "accent": "#4F46E5",       # Indigo 600
+        "warning": "#D97706",      # Amber 600
+        "danger": "#DC2626",       # Red 600
+        "neutral": "#94A3B8",
+        "bar_sequence": ["#0284C7", "#059669", "#4F46E5", "#D97706", "#DB2777", "#7C3AED"]
+    }
+}
 
-def activity_line_chart(df, theme="Dark"):
-    daily = df.set_index("message_time").groupby(pd.Grouper(freq="D")).size().reset_index(name="messages")
-    fig = px.area(daily, x="message_time", y="messages", 
-                  title="Interaction Volume Over Time",
-                  template=get_template(theme),
-                  color_discrete_sequence=["#00D4FF"])
-    fig.update_xaxes(title="Date")
-    fig.update_yaxes(title="Messages")
+def clean_chart_base(fig, theme="Dark", height=340):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, -apple-system, BlinkMacSystemFont, sans-serif", color=t["text"], size=12),
+        margin=dict(l=15, r=15, t=35, b=20),
+        height=height,
+        hoverlabel=dict(
+            bgcolor=t["card_bg"],
+            bordercolor=t["border"],
+            font_size=12,
+            font_family="Inter, -apple-system, sans-serif",
+            font_color=t["text"]
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(color=t["subtext"], size=11)
+        )
+    )
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor=t["grid"],
+        gridwidth=1,
+        zerolinecolor=t["grid"],
+        linecolor=t["grid"],
+        tickfont=dict(color=t["subtext"], size=11)
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=t["grid"],
+        gridwidth=1,
+        zerolinecolor=t["grid"],
+        linecolor=t["grid"],
+        tickfont=dict(color=t["subtext"], size=11)
+    )
     return fig
+
+def activity_timeline_chart(timeline_df, theme="Dark"):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    fig = go.Figure()
+
+    if not timeline_df.empty:
+        fig.add_trace(go.Bar(
+            x=timeline_df["message_time"],
+            y=timeline_df["user_messages"],
+            name="Your Prompts",
+            marker=dict(color=t["primary"], line=dict(width=0))
+        ))
+        fig.add_trace(go.Bar(
+            x=timeline_df["message_time"],
+            y=timeline_df["assistant_messages"],
+            name="AI Responses",
+            marker=dict(color=t["secondary"], line=dict(width=0))
+        ))
+        fig.add_trace(go.Scatter(
+            x=timeline_df["message_time"],
+            y=timeline_df["cumulative_messages"],
+            name="Cumulative Volume",
+            yaxis="y2",
+            mode="lines",
+            line=dict(color=t["accent"], width=2.5)
+        ))
+
+    fig.update_layout(
+        barmode="stack",
+        yaxis=dict(title=dict(text="Messages", font=dict(color=t["subtext"], size=11))),
+        yaxis2=dict(
+            title=dict(text="Cumulative", font=dict(color=t["accent"], size=11)),
+            overlaying="y",
+            side="right",
+            showgrid=False,
+            tickfont=dict(color=t["accent"], size=11)
+        )
+    )
+    return clean_chart_base(fig, theme=theme, height=360)
 
 def role_distribution_chart(df, theme="Dark"):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
     role_counts = df["role"].value_counts().reset_index()
     role_counts.columns = ["role", "count"]
-    fig = px.pie(role_counts, values="count", names="role", 
-                 title="User vs Assistant Distribution",
-                 hole=0.4,
-                 template=get_template(theme),
-                 color_discrete_sequence=px.colors.sequential.Tealgrn)
-    return fig
+    
+    color_map = {
+        "user": t["primary"],
+        "assistant": t["secondary"],
+        "system": t["neutral"],
+        "tool": t["accent"]
+    }
+    colors = [color_map.get(r, t["neutral"]) for r in role_counts["role"]]
+
+    fig = go.Figure(data=[go.Pie(
+        labels=role_counts["role"].str.capitalize(),
+        values=role_counts["count"],
+        hole=0.68,
+        marker=dict(colors=colors, line=dict(color=t["border"], width=1.5)),
+        textinfo="percent",
+        textposition="outside",
+        hoverinfo="label+value+percent",
+        showlegend=True
+    )])
+    
+    fig.update_layout(
+        annotations=[dict(
+            text=f"<b>{len(df):,}</b><br><span style='font-size:11px; color:{t['subtext']}'>Messages</span>",
+            x=0.5, y=0.5,
+            font_size=16,
+            showarrow=False,
+            font_color=t["text"]
+        )]
+    )
+    return clean_chart_base(fig, theme=theme, height=360)
 
 def hourly_heatmap(pivot_data, theme="Dark"):
-    fig = px.imshow(pivot_data, 
-                    labels=dict(x="Hour of Day", y="Day of Week", color="Messages"),
-                    x=pivot_data.columns,
-                    y=pivot_data.index,
-                    aspect="auto",
-                    title="Usage Peak Hours",
-                    template=get_template(theme),
-                    color_continuous_scale="Viridis")
-    return fig
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    
+    # Clean solid step ramp
+    scale = [
+        [0.0, t["border"]],
+        [0.25, "#0E7490" if theme == "Dark" else "#E0F2FE"],
+        [0.60, "#0284C7" if theme == "Dark" else "#38BDF8"],
+        [1.0, "#38BDF8" if theme == "Dark" else "#0284C7"]
+    ]
+
+    fig = go.Figure(data=go.Heatmap(
+        z=pivot_data.values,
+        x=[f"{h:02d}:00" for h in pivot_data.columns],
+        y=pivot_data.index,
+        colorscale=scale,
+        showscale=True,
+        colorbar=dict(
+            title=dict(text="Msgs", font=dict(color=t["subtext"], size=10)),
+            tickfont=dict(color=t["subtext"], size=10),
+            thickness=12,
+            len=0.8
+        )
+    ))
+    
+    fig.update_layout(
+        xaxis=dict(tickangle=-45, title=dict(text="Hour of Day", font=dict(color=t["subtext"], size=11))),
+        yaxis=dict(title="")
+    )
+    return clean_chart_base(fig, theme=theme, height=360)
+
+def weekday_bar_chart(weekday_df, theme="Dark"):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    fig = go.Figure(data=[go.Bar(
+        x=weekday_df["weekday"],
+        y=weekday_df["count"],
+        marker=dict(color=t["primary"], line=dict(width=0)),
+        text=weekday_df["count"],
+        textposition="outside",
+        textfont=dict(color=t["subtext"], size=11)
+    )])
+    fig.update_layout(
+        xaxis=dict(title=""),
+        yaxis=dict(title=dict(text="Messages", font=dict(color=t["subtext"], size=11)))
+    )
+    return clean_chart_base(fig, theme=theme, height=320)
+
+def top_ngrams_bar_chart(ngram_df, theme="Dark"):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    if ngram_df.empty:
+        return clean_chart_base(go.Figure(), theme=theme, height=340)
+
+    sorted_df = ngram_df.sort_values("count", ascending=True)
+    
+    fig = go.Figure(data=[go.Bar(
+        y=sorted_df["phrase"],
+        x=sorted_df["count"],
+        orientation="h",
+        marker=dict(color=t["accent"], line=dict(width=0)),
+        text=sorted_df["count"],
+        textposition="outside",
+        textfont=dict(color=t["subtext"], size=11)
+    )])
+    fig.update_layout(
+        xaxis=dict(title=dict(text="Occurrences", font=dict(color=t["subtext"], size=11))),
+        yaxis=dict(title="")
+    )
+    return clean_chart_base(fig, theme=theme, height=340)
+
+def sentiment_breakdown_chart(df, theme="Dark"):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    user_df = df[df["role"] == "user"]
+    if "sentiment_category" not in user_df.columns or user_df.empty:
+        return clean_chart_base(go.Figure(), theme=theme, height=300)
+
+    counts = user_df["sentiment_category"].value_counts().reindex(["Positive", "Neutral", "Negative"], fill_value=0).reset_index()
+    counts.columns = ["Category", "Count"]
+    
+    colors = [t["secondary"], t["neutral"], t["danger"]]
+
+    fig = go.Figure(data=[go.Bar(
+        x=counts["Category"],
+        y=counts["Count"],
+        marker=dict(color=colors, line=dict(width=0)),
+        text=counts["Count"],
+        textposition="outside",
+        textfont=dict(color=t["subtext"], size=11)
+    )])
+    fig.update_layout(
+        xaxis=dict(title=""),
+        yaxis=dict(title=dict(text="Messages", font=dict(color=t["subtext"], size=11)))
+    )
+    return clean_chart_base(fig, theme=theme, height=300)
 
 def sentiment_trend_chart(df, theme="Dark"):
-    # Filter for user messages and resample
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
     user_df = df[df["role"] == "user"].copy()
-    if "sentiment" not in user_df.columns:
+    if "sentiment_polarity" not in user_df.columns or user_df.empty:
         return None
     
-    daily_sentiment = user_df.set_index("message_time").groupby(pd.Grouper(freq="D"))["sentiment"].mean().reset_index()
-    fig = px.line(daily_sentiment, x="message_time", y="sentiment", 
-                  title="User Sentiment Trend",
-                  template=get_template(theme),
-                  line_shape="spline")
-    fig.add_hline(y=0, line_dash="dash", line_color="gray")
-    return fig
+    daily = user_df.set_index("message_time").groupby(pd.Grouper(freq="D"))["sentiment_polarity"].mean().reset_index().dropna()
+    if daily.empty:
+        return None
 
-def generate_wordcloud(df, theme="Dark"):
-    text = " ".join(df[df["role"] == "user"]["content"].astype(str))
-    if not text.strip():
-        text = "No messages found"
-        
-    bg_color = "#0E1117" if theme == "Dark" else "white"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=daily["message_time"],
+        y=daily["sentiment_polarity"],
+        mode="lines+markers",
+        line=dict(color=t["primary"], width=2),
+        marker=dict(size=4, color=t["primary"]),
+        name="Daily Polarity"
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color=t["subtext"], opacity=0.5)
     
-    wc = WordCloud(width=1200, height=600, 
-                   background_color=bg_color, 
-                   colormap="cool",
-                   max_words=100).generate(text)
-    
-    fig, ax = plt.subplots(figsize=(12, 6), facecolor=bg_color)
-    ax.imshow(wc, interpolation="bilinear")
-    ax.axis("off")
-    plt.tight_layout(pad=0)
-    return fig
+    fig.update_layout(
+        xaxis=dict(title=""),
+        yaxis=dict(title=dict(text="Polarity Score", font=dict(color=t["subtext"], size=11)), range=[-1.05, 1.05])
+    )
+    return clean_chart_base(fig, theme=theme, height=300)
 
 def message_length_distribution(df, theme="Dark"):
-    # Filter out very long outliers for better visualization, limit to 95th percentile
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
     q95 = df["word_count"].quantile(0.95)
-    filtered_df = df[df["word_count"] <= q95] if not pd.isna(q95) else df
+    filtered = df[df["word_count"] <= q95] if not pd.isna(q95) else df
     
-    fig = px.histogram(filtered_df, x="word_count", color="role", 
-                       barmode="overlay",
-                       title="Message Length Distribution (Words)",
-                       template=get_template(theme),
-                       opacity=0.7,
-                       color_discrete_map={"user": "#00D4FF", "assistant": "#FF4B4B"})
-    fig.update_xaxes(title="Word Count")
-    fig.update_yaxes(title="Frequency")
-    return fig
+    fig = go.Figure()
+    u_words = filtered[filtered["role"] == "user"]["word_count"]
+    a_words = filtered[filtered["role"] == "assistant"]["word_count"]
+
+    if not u_words.empty:
+        fig.add_trace(go.Histogram(
+            x=u_words,
+            name="Your Words",
+            marker=dict(color=t["primary"]),
+            opacity=0.8
+        ))
+    if not a_words.empty:
+        fig.add_trace(go.Histogram(
+            x=a_words,
+            name="AI Words",
+            marker=dict(color=t["secondary"]),
+            opacity=0.8
+        ))
+
+    fig.update_layout(
+        barmode="overlay",
+        xaxis=dict(title=dict(text="Word Count per Message", font=dict(color=t["subtext"], size=11))),
+        yaxis=dict(title=dict(text="Frequency", font=dict(color=t["subtext"], size=11)))
+    )
+    return clean_chart_base(fig, theme=theme, height=340)
+
+def code_languages_chart(lang_df, theme="Dark"):
+    t = THEME_CONFIG.get(theme, THEME_CONFIG["Dark"])
+    if lang_df.empty:
+        return clean_chart_base(go.Figure(), theme=theme, height=300)
+
+    top_langs = lang_df.head(8)
+    fig = go.Figure(data=[go.Bar(
+        x=top_langs["language"],
+        y=top_langs["count"],
+        marker=dict(color=t["bar_sequence"][:len(top_langs)], line=dict(width=0)),
+        text=top_langs["count"],
+        textposition="outside",
+        textfont=dict(color=t["subtext"], size=11)
+    )])
+    fig.update_layout(
+        xaxis=dict(title=""),
+        yaxis=dict(title=dict(text="Snippets", font=dict(color=t["subtext"], size=11)))
+    )
+    return clean_chart_base(fig, theme=theme, height=300)
