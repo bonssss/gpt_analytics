@@ -57,14 +57,14 @@ from src.visualization import (
 )
 
 # Session State Initialization
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "Landing"
+if "nav_page" not in st.session_state:
+    st.session_state.nav_page = "🏠 Home & Upload"
 if "data_mode" not in st.session_state:
     st.session_state.data_mode = "Demo Dataset"
 if "theme" not in st.session_state:
     st.session_state.theme = "Dark"
-if "uploaded_file_data" not in st.session_state:
-    st.session_state.uploaded_file_data = None
+if "uploaded_file_bytes" not in st.session_state:
+    st.session_state.uploaded_file_bytes = None
 
 # --- TOP NAVBAR HEADER ---
 nav_col1, nav_col2, nav_col3 = st.columns([2.2, 1.8, 1.0])
@@ -80,16 +80,13 @@ with nav_col1:
     """, unsafe_allow_html=True)
 
 with nav_col2:
-    page_options = ["🏠 Home & Upload", "📊 Analytics Dashboard"]
-    selected_page_idx = 0 if st.session_state.current_page == "Landing" else 1
-    chosen_page = st.radio(
+    st.radio(
         "Navigation",
-        page_options,
-        index=selected_page_idx,
+        ["🏠 Home & Upload", "📊 Analytics Dashboard"],
+        key="nav_page",
         horizontal=True,
         label_visibility="collapsed"
     )
-    st.session_state.current_page = "Landing" if "Home" in chosen_page else "Dashboard"
 
 with nav_col3:
     theme = st.selectbox(
@@ -197,7 +194,8 @@ if theme == "Dark":
         [data-testid="stFileUploader"] section:hover {
             border-color: #38BDF8 !important;
         }
-        [data-testid="stFileUploader"] button {
+        [data-testid="stFileUploader"] button,
+        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
             background-color: #0284C7 !important;
             color: #FFFFFF !important;
             border: none !important;
@@ -516,11 +514,11 @@ else:
 
 # --- DATA PROCESSING FUNCTION ---
 @st.cache_data(show_spinner=False)
-def load_and_enrich_data(file_obj, is_demo=False):
-    if is_demo:
+def load_and_enrich_data(file_bytes_or_none, is_demo=False):
+    if is_demo or file_bytes_or_none is None:
         raw_df = generate_sample_chat_data()
     else:
-        raw_df = load_chatgpt_export(file_obj)
+        raw_df = load_chatgpt_export(file_bytes_or_none)
     
     if raw_df.empty:
         return raw_df
@@ -531,7 +529,7 @@ def load_and_enrich_data(file_obj, is_demo=False):
 # ==============================================================================
 # VIEW 1: CLEAN RESPONSIVE LANDING PAGE
 # ==============================================================================
-if st.session_state.current_page == "Landing":
+if st.session_state.nav_page == "🏠 Home & Upload":
     
     # Hero Section
     st.markdown("""
@@ -562,7 +560,7 @@ if st.session_state.current_page == "Landing":
         """, unsafe_allow_html=True)
         if st.button("🚀 Launch Live Demo", use_container_width=True, type="primary"):
             st.session_state.data_mode = "Demo Dataset"
-            st.session_state.current_page = "Dashboard"
+            st.session_state.nav_page = "📊 Analytics Dashboard"
             st.rerun()
 
     with cta_col2:
@@ -582,9 +580,9 @@ if st.session_state.current_page == "Landing":
             help="Extract from ChatGPT export ZIP -> conversations.json"
         )
         if uploaded_landing_file is not None:
-            st.session_state.uploaded_file_data = uploaded_landing_file
+            st.session_state.uploaded_file_bytes = uploaded_landing_file.getvalue()
             st.session_state.data_mode = "Upload Export (.json)"
-            st.session_state.current_page = "Dashboard"
+            st.session_state.nav_page = "📊 Analytics Dashboard"
             st.rerun()
 
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
@@ -656,16 +654,22 @@ else:
     # Resolve dataset
     if st.session_state.data_mode == "Demo Dataset":
         df = load_and_enrich_data(None, is_demo=True)
-    elif st.session_state.uploaded_file_data is not None:
-        df = load_and_enrich_data(st.session_state.uploaded_file_data, is_demo=False)
+    elif st.session_state.uploaded_file_bytes is not None:
+        df = load_and_enrich_data(st.session_state.uploaded_file_bytes, is_demo=False)
     else:
         df = load_and_enrich_data(None, is_demo=True)
 
     if df.empty:
-        st.warning("No data found. Switch to Demo mode or upload a valid JSON file.")
-        if st.button("Load Demo Data", type="primary"):
-            st.session_state.data_mode = "Demo Dataset"
-            st.rerun()
+        st.warning("No data found or failed to parse JSON file. Switch to Demo mode or upload a valid conversations.json.")
+        col_fb1, col_fb2 = st.columns(2)
+        with col_fb1:
+            if st.button("🚀 Load Demo Dataset", type="primary"):
+                st.session_state.data_mode = "Demo Dataset"
+                st.rerun()
+        with col_fb2:
+            if st.button("📁 Return to Upload Screen"):
+                st.session_state.nav_page = "🏠 Home & Upload"
+                st.rerun()
         st.stop()
 
     # --- TOP TOOLBAR FILTERS (RESPONSIVE INLINE) ---
