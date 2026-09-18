@@ -891,10 +891,7 @@ if st.session_state.active_tab == "Home":
     # Hero Section
     st.markdown("""
         <div class="landing-hero">
-            <span class="hero-badge">
-                ⚡ Intelligence for your ChatGPT History
-            </span>
-            <h1 class="hero-title">
+            <h1 class="hero-title" style="margin-top: 0;">
                 Understand Your AI Habits & Conversation Patterns
             </h1>
             <p class="hero-desc">
