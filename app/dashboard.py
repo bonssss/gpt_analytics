@@ -230,7 +230,8 @@ if current_theme == "Dark":
             border-color: #38BDF8 !important;
         }
         [data-testid="stFileUploader"] button,
-        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
+        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"],
+        [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
             background-color: #0284C7 !important;
             color: #FFFFFF !important;
             border: none !important;
@@ -263,7 +264,7 @@ if current_theme == "Dark":
             color: #F8FAFC !important;
         }
 
-        /* Inputs & Selects */
+        /* Inputs & Selects (Dark Mode) */
         [data-baseweb="input"], [data-baseweb="base-input"], input, textarea {
             background-color: #10141E !important;
             color: #F8FAFC !important;
@@ -274,36 +275,47 @@ if current_theme == "Dark":
             border-color: #1E2638 !important;
             color: #F8FAFC !important;
         }
+        div[data-baseweb="tag"] {
+            background-color: #1E3A5F !important;
+            color: #38BDF8 !important;
+            border: 1px solid #0284C7 !important;
+        }
 
-        /* Tabs */
+        /* Tabs (Dark Mode) */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 6px;
+            gap: 8px;
             background-color: transparent;
             border-bottom: 1px solid #1E2638;
-            padding-bottom: 4px;
+            padding-bottom: 6px;
             margin-bottom: 16px;
             overflow-x: auto;
             flex-wrap: nowrap;
         }
         .stTabs [data-baseweb="tab"] {
-            border-radius: 6px 6px 0 0;
+            border-radius: 6px;
             padding: 8px 16px;
             font-size: 0.9rem;
-            font-weight: 500;
+            font-weight: 600;
             color: #94A3B8 !important;
-            border: none;
-            background-color: transparent;
+            border: 1px solid #1E2638 !important;
+            background-color: #10141E !important;
             white-space: nowrap;
         }
+        .stTabs [data-baseweb="tab"] * {
+            color: #94A3B8 !important;
+        }
         .stTabs [aria-selected="true"] {
-            color: #F8FAFC !important;
-            background-color: #182234 !important;
-            border-bottom: 2px solid #38BDF8 !important;
-            font-weight: 600;
+            color: #FFFFFF !important;
+            background-color: #0284C7 !important;
+            border: 1px solid #0284C7 !important;
+            font-weight: 700 !important;
+        }
+        .stTabs [aria-selected="true"] * {
+            color: #FFFFFF !important;
         }
 
-        /* Buttons */
-        [data-testid="baseButton-primary"] {
+        /* Buttons (Dark Mode) */
+        [data-testid="baseButton-primary"], [data-testid="stBaseButton-primary"], button[kind="primary"] {
             background-color: #0284C7 !important;
             color: #FFFFFF !important;
             border: none !important;
@@ -311,12 +323,15 @@ if current_theme == "Dark":
             font-weight: 600 !important;
             padding: 0.5rem 1.25rem !important;
         }
-        [data-testid="baseButton-secondary"] {
+        [data-testid="baseButton-secondary"], [data-testid="stBaseButton-secondary"], button[kind="secondary"], .stButton > button:not([kind="primary"]) {
             background-color: #10141E !important;
             color: #F8FAFC !important;
             border: 1px solid #1E2638 !important;
             border-radius: 6px !important;
             font-weight: 500 !important;
+        }
+        [data-testid="baseButton-secondary"] *, [data-testid="stBaseButton-secondary"] *, button[kind="secondary"] * {
+            color: #F8FAFC !important;
         }
 
         /* Responsive Media Queries */
@@ -373,7 +388,7 @@ else:
         }
 
         [data-testid="stCaptionContainer"], small {
-            color: #475569 !important;
+            color: #334155 !important;
             font-weight: 500 !important;
         }
 
@@ -387,7 +402,7 @@ else:
         }
         
         div[data-testid="metric-container"] label {
-            color: #475569 !important;
+            color: #334155 !important;
             font-size: 0.75rem !important;
             font-weight: 700 !important;
             text-transform: uppercase;
@@ -511,7 +526,8 @@ else:
             background-color: #EFF6FF !important;
         }
         [data-testid="stFileUploader"] button,
-        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
+        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"],
+        [data-testid="stFileUploader"] [data-testid="stBaseButton-secondary"] {
             background-color: #0284C7 !important;
             color: #FFFFFF !important;
             border: 1px solid #0284C7 !important;
@@ -553,49 +569,126 @@ else:
             color: #0F172A !important;
         }
 
-        /* Inputs & Selects (Light Mode) */
-        [data-baseweb="input"], [data-baseweb="base-input"], input, textarea {
+        /* COMPLETE INPUTS, DATEPICKER & MULTISELECT OVERRIDES (LIGHT MODE) */
+        [data-baseweb="input"],
+        [data-baseweb="base-input"],
+        [data-testid="stDateInput"] input,
+        [data-testid="stTextInput"] input,
+        [data-testid="stDateInput"] div[data-baseweb="input"],
+        [data-testid="stDateInput"] div[data-baseweb="base-input"],
+        div[data-baseweb="input"],
+        div[data-baseweb="base-input"],
+        div[data-baseweb="input"] > div,
+        input, textarea {
+            background-color: #FFFFFF !important;
+            color: #0F172A !important;
+            -webkit-text-fill-color: #0F172A !important;
+            border: 1px solid #CBD5E1 !important;
+            font-weight: 600 !important;
+        }
+
+        /* MultiSelect & Selectbox Container */
+        [data-testid="stMultiSelect"] div[data-baseweb="select"],
+        [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
+        [data-testid="stSelectbox"] div[data-baseweb="select"],
+        [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+        div[data-baseweb="select"],
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        ul[role="listbox"],
+        li[role="option"] {
             background-color: #FFFFFF !important;
             color: #0F172A !important;
             border: 1px solid #CBD5E1 !important;
             font-weight: 500 !important;
         }
-        div[data-baseweb="select"] > div {
-            background-color: #FFFFFF !important;
-            border: 1px solid #CBD5E1 !important;
-            color: #0F172A !important;
+
+        /* MultiSelect Tags / Chips (High-Contrast Sky Blue Pills) */
+        div[data-baseweb="tag"],
+        span[data-baseweb="tag"] {
+            background-color: #0284C7 !important;
+            border: 1px solid #0284C7 !important;
+            color: #FFFFFF !important;
+            border-radius: 4px !important;
+            padding: 2px 6px !important;
+        }
+        div[data-baseweb="tag"] span,
+        span[data-baseweb="tag"] span {
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+            font-weight: 600 !important;
+        }
+        div[data-baseweb="tag"] svg,
+        span[data-baseweb="tag"] svg {
+            fill: #FFFFFF !important;
+            color: #FFFFFF !important;
         }
 
-        /* Tabs (Light Mode) */
+        /* SVG Icons inside inputs (calendar icon, down arrow, search) */
+        [data-baseweb="select"] svg,
+        [data-testid="stDateInput"] svg,
+        [data-testid="stSelectbox"] svg,
+        [data-testid="stMultiSelect"] svg,
+        svg[data-icon="calendar"] {
+            fill: #334155 !important;
+            color: #334155 !important;
+        }
+
+        /* Checkbox (Code Only) */
+        [data-testid="stCheckbox"] label span,
+        [data-testid="stCheckbox"] p {
+            color: #0F172A !important;
+            font-weight: 600 !important;
+        }
+
+        /* Tabs (High-Contrast Pill Tabs in Light Mode) */
         .stTabs [data-baseweb="tab-list"] {
-            gap: 6px;
+            gap: 8px;
             background-color: transparent;
             border-bottom: 2px solid #E2E8F0;
-            padding-bottom: 4px;
+            padding-bottom: 6px;
             margin-bottom: 16px;
             overflow-x: auto;
             flex-wrap: nowrap;
         }
         .stTabs [data-baseweb="tab"] {
-            border-radius: 6px 6px 0 0;
-            padding: 8px 16px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #475569 !important;
-            border: none;
-            background-color: transparent;
-            white-space: nowrap;
+            border-radius: 6px !important;
+            padding: 8px 16px !important;
+            font-size: 0.9rem !important;
+            font-weight: 600 !important;
+            color: #1E293B !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid #CBD5E1 !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+            white-space: nowrap !important;
+        }
+        .stTabs [data-baseweb="tab"] * {
+            color: #1E293B !important;
+            font-weight: 600 !important;
+        }
+        .stTabs [data-baseweb="tab"]:hover {
+            color: #0284C7 !important;
+            border-color: #0284C7 !important;
+            background-color: #EFF6FF !important;
+        }
+        .stTabs [data-baseweb="tab"]:hover * {
+            color: #0284C7 !important;
         }
         .stTabs [aria-selected="true"] {
-            color: #0284C7 !important;
-            background-color: #EFF6FF !important;
-            border: 1px solid #BFDBFE !important;
-            border-bottom: 2px solid #0284C7 !important;
-            font-weight: 700;
+            color: #FFFFFF !important;
+            background-color: #0284C7 !important;
+            border: 1px solid #0284C7 !important;
+            font-weight: 700 !important;
+            box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3) !important;
+        }
+        .stTabs [aria-selected="true"] * {
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
         }
 
-        /* Buttons (Light Mode) */
-        [data-testid="baseButton-primary"] {
+        /* Secondary & Primary Buttons (Light Mode) */
+        [data-testid="baseButton-primary"], [data-testid="stBaseButton-primary"], button[kind="primary"] {
             background-color: #0284C7 !important;
             color: #FFFFFF !important;
             border: none !important;
@@ -604,7 +697,10 @@ else:
             padding: 0.5rem 1.25rem !important;
             box-shadow: 0 1px 2px rgba(2, 132, 199, 0.2) !important;
         }
-        [data-testid="baseButton-secondary"] {
+        [data-testid="baseButton-secondary"],
+        [data-testid="stBaseButton-secondary"],
+        button[kind="secondary"],
+        .stButton > button:not([kind="primary"]) {
             background-color: #FFFFFF !important;
             color: #0F172A !important;
             border: 1px solid #CBD5E1 !important;
@@ -612,9 +708,25 @@ else:
             font-weight: 600 !important;
             box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
         }
-        [data-testid="baseButton-secondary"]:hover {
-            background-color: #F8FAFC !important;
-            border-color: #94A3B8 !important;
+        [data-testid="baseButton-secondary"] *,
+        [data-testid="stBaseButton-secondary"] *,
+        button[kind="secondary"] *,
+        .stButton > button:not([kind="primary"]) * {
+            color: #0F172A !important;
+            font-weight: 600 !important;
+        }
+        [data-testid="baseButton-secondary"]:hover,
+        [data-testid="stBaseButton-secondary"]:hover,
+        button[kind="secondary"]:hover,
+        .stButton > button:not([kind="primary"]):hover {
+            background-color: #EFF6FF !important;
+            border-color: #0284C7 !important;
+            color: #0284C7 !important;
+        }
+        [data-testid="baseButton-secondary"]:hover *,
+        [data-testid="stBaseButton-secondary"]:hover *,
+        button[kind="secondary"]:hover *,
+        .stButton > button:not([kind="primary"]):hover * {
             color: #0284C7 !important;
         }
 
