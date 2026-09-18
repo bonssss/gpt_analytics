@@ -1,285 +1,988 @@
-
 import streamlit as st
-
-st.set_page_config(
-    page_title="ChatGPT Intelligence Dashboard",
-    page_icon="🧠",
-    layout="centered"
-)
-
 import pandas as pd
+import numpy as np
 import sys
 import os
+from datetime import datetime
+
+# Set page configuration as first Streamlit command
+st.set_page_config(
+    page_title="GPT Analytics • Intelligence Hub",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # Add project root to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Download necessary NLP data
+# Suppress noisy NLTK download messages in stdout
 import nltk
-@st.cache_resource
-def download_nlp_data():
-    try:
-        nltk.download('punkt')
-        nltk.download('brown')
-        nltk.download('wordnet')
-        nltk.download('averaged_perceptron_tagger')
-    except:
-        pass
+@st.cache_resource(show_spinner=False)
+def setup_nlp_resources():
+    for pkg in ['punkt', 'brown', 'wordnet', 'averaged_perceptron_tagger']:
+        try:
+            nltk.download(pkg, quiet=True)
+        except Exception:
+            pass
 
-download_nlp_data()
+setup_nlp_resources()
 
-from src.parser import load_chatgpt_export
-from src.analytics import compute_basic_stats, activity_heatmap_data, get_activity_over_time
-from src.visualization import (
-    activity_line_chart,
-    role_distribution_chart,
-    generate_wordcloud,
-    hourly_heatmap,
-    sentiment_trend_chart,
-    message_length_distribution
+from src.parser import load_chatgpt_export, generate_sample_chat_data
+from src.analytics import (
+    compute_basic_stats,
+    get_activity_over_time,
+    activity_heatmap_data,
+    get_hourly_activity,
+    get_weekday_activity,
+    get_conversation_leaderboard,
+    get_token_cost_estimation
 )
-from src.nlp import add_sentiment_to_df, cluster_topics
+from src.nlp import (
+    add_sentiment_to_df,
+    extract_top_ngrams,
+    cluster_topics_with_labels,
+    detect_code_languages
+)
+from src.visualization import (
+    activity_timeline_chart,
+    role_distribution_chart,
+    hourly_heatmap,
+    weekday_bar_chart,
+    top_ngrams_bar_chart,
+    sentiment_breakdown_chart,
+    sentiment_trend_chart,
+    message_length_distribution,
+    code_languages_chart
+)
 
-# --- PAGE CONFIG ---
+# Session State Initialization
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Landing"
+if "data_mode" not in st.session_state:
+    st.session_state.data_mode = "Demo Dataset"
+if "theme" not in st.session_state:
+    st.session_state.theme = "Dark"
+if "uploaded_file_data" not in st.session_state:
+    st.session_state.uploaded_file_data = None
 
+# --- TOP NAVBAR HEADER ---
+nav_col1, nav_col2, nav_col3 = st.columns([2.2, 1.8, 1.0])
 
-# --- CUSTOM STYLING ---
-st.markdown("""
-<style>
-    /* Gradient Title */
-    .title-text {
-        background: -webkit-linear-gradient(45deg, #1cb5e0, #000851);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        font-family: 'Inter', sans-serif;
-        font-weight: 800;
-        font-size: 3.5rem;
-        padding-bottom: 10px;
-        margin-top: -40px;
-    }
-    
-    @media (prefers-color-scheme: dark) {
-        .title-text {
-            background: -webkit-linear-gradient(45deg, #4ECDC4, #FF6B6B);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-    }
-
-    .subtitle-text {
-        text-align: center;
-        color: #888;
-        font-size: 1.2rem;
-        margin-bottom: 2rem;
-    }
-
-    .metric-container {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .stMetric {
-        background-color: rgba(28, 131, 225, 0.05);
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid rgba(28, 131, 225, 0.1);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        transition: transform 0.2s;
-    }
-    .stMetric:hover {
-        transform: translateY(-2px);
-    }
-    
-    /* Make File Uploader look premium (colors applied dynamically by theme) */
-    [data-testid='stFileUploader'] section {
-        padding: 3rem;
-        border-radius: 15px;
-        transition: all 0.3s ease;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- MAIN CONTENT ---
-st.markdown("<h1 class='title-text'> ChatGPT Analytics</h1>", unsafe_allow_html=True)
-st.markdown("<p class='subtitle-text'>Unlock insights and deep patterns from your conversation history</p>", unsafe_allow_html=True)
-
-uploaded_file = st.file_uploader("Upload ChatGPT Export (JSON) directly below", type=["json"])
-
-# Consolidated Settings
-with st.expander("⚙️ Settings & Visualization Options", expanded=False):
-    col_setup1, col_setup2 = st.columns(2)
-    with col_setup1:
-        theme = st.selectbox("App Theme", ["Dark", "Light"])
-    with col_setup2:
-        clustering_on = st.checkbox("Enable Topic Clustering", value=False)
-
-# Apply global theme CSS
-if theme == "Light":
-    st.markdown('''
-        <style>
-            /* Light Theme Overrides */
-            .stApp { background-color: #F0F2F6 !important; }
-            .stApp, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6, .stApp span, .stApp label { color: #31333F !important; text-shadow: none !important; }
-            header[data-testid="stHeader"] { background-color: transparent !important; }
-            
-            /* UI Elements Fixes for Light Mode */
-            [data-testid="stExpander"] details summary { background-color: #FFFFFF !important; color: #31333F !important; border-radius: 8px; border: 1px solid #E6E9EF !important; }
-            [data-testid="stExpander"] details summary p { color: #31333F !important; }
-            [data-baseweb="select"] > div { background-color: #FFFFFF !important; color: #31333F !important; border-color: #E6E9EF !important; }
-            [data-baseweb="select"] span { color: #31333F !important; }
-            
-            /* Buttons */
-            [data-testid="baseButton-secondary"], [data-testid="stFileUploader"] button { background-color: #FFFFFF !important; color: #31333F !important; border: 1px solid #E6E9EF !important; }
-            [data-testid="baseButton-secondary"]:hover, [data-testid="stFileUploader"] button:hover { border-color: #FF4B4B !important; color: #FF4B4B !important; background-color: #FFFFFF !important; }
-            [data-testid="baseButton-primary"] { background-color: #FF4B4B !important; color: #FFFFFF !important; border-color: #FF4B4B !important; }
-            [data-testid="baseButton-primary"]:hover { background-color: #FF3333 !important; border-color: #FF3333 !important; color: #FFFFFF !important; }
-            
-            /* Inputs */
-            [data-baseweb="input"], [data-baseweb="base-input"] { background-color: #FFFFFF !important; }
-            [data-baseweb="input"] input { color: #31333F !important; background-color: #FFFFFF !important; }
-            
-            .stMetric { background-color: #FFFFFF !important; border: 1px solid #E6E9EF !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; }
-            [data-testid='stFileUploader'] section { background-color: #FFFFFF !important; border: 2px dashed #D2D6DF !important; }
-            [data-testid='stFileUploader'] section:hover { border-color: #4ECDC4 !important; background-color: rgba(78, 205, 196, 0.1) !important; }
-            .subtitle-text, [data-testid="stMarkdownContainer"] p.subtitle-text { color: #555 !important; }
-        </style>
-    ''', unsafe_allow_html=True)
-else:
-    st.markdown('''
-        <style>
-            /* Dark Theme Overrides */
-            .stApp { background-color: #0E1117 !important; }
-            .stApp, .stApp p, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6, .stApp span, .stApp label { color: #FAFAFA !important; }
-            header[data-testid="stHeader"] { background-color: transparent !important; }
-            
-            /* UI Elements Fixes for Dark Mode */
-            [data-testid="stExpander"] details summary { background-color: #262730 !important; color: #FAFAFA !important; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1) !important; }
-            [data-testid="stExpander"] details summary p { color: #FAFAFA !important; }
-            [data-baseweb="select"] > div { background-color: #262730 !important; color: #FAFAFA !important; border-color: rgba(255,255,255,0.1) !important; }
-            [data-baseweb="select"] span { color: #FAFAFA !important; }
-            ul[data-baseweb="menu"] { background-color: #262730 !important; color: #FAFAFA !important; }
-            [data-baseweb="checkbox"] div { color: #FAFAFA !important; }
-            
-            /* Buttons */
-            [data-testid="baseButton-secondary"], [data-testid="stFileUploader"] button { background-color: #262730 !important; color: #FAFAFA !important; border: 1px solid rgba(255,255,255,0.1) !important; }
-            [data-testid="baseButton-secondary"]:hover, [data-testid="stFileUploader"] button:hover { border-color: #FF4B4B !important; color: #FF4B4B !important; background-color: #262730 !important; }
-            [data-testid="baseButton-primary"] { background-color: #FF4B4B !important; color: #FFFFFF !important; border-color: #FF4B4B !important; }
-            [data-testid="baseButton-primary"]:hover { background-color: #FF3333 !important; border-color: #FF3333 !important; color: #FFFFFF !important; }
-            
-            /* Inputs */
-            [data-baseweb="input"], [data-baseweb="base-input"] { background-color: #262730 !important; }
-            [data-baseweb="input"] input { color: #FAFAFA !important; background-color: #262730 !important; -webkit-text-fill-color: #FAFAFA !important; }
-
-            .stMetric { background-color: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; }
-            [data-testid='stFileUploader'] section { background-color: rgba(128, 128, 128, 0.05) !important; border: 2px dashed rgba(128, 128, 128, 0.3) !important; }
-            [data-testid='stFileUploader'] section:hover { border-color: #4ECDC4 !important; background-color: rgba(78, 205, 196, 0.05) !important; }
-            .subtitle-text, [data-testid="stMarkdownContainer"] p.subtitle-text { color: #888 !important; }
-        </style>
-    ''', unsafe_allow_html=True)
-
-if uploaded_file:
-
-    with st.spinner("Processing your intelligence data..."):
-        df = load_chatgpt_export(uploaded_file)
-        
-        if df.empty:
-            st.error("Could not parse the JSON file. Please ensure it's a valid ChatGPT export.")
-        else:
-            # Enrich data
-            df = add_sentiment_to_df(df)
-            
-            # Basic Stats
-            stats = compute_basic_stats(df)
-            
-            # --- ROW 1: METRICS ---
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Conversations", f"{stats['total_conversations']:,}")
-            m2.metric("Total Messages", f"{stats['total_messages']:,}")
-            m3.metric("Avg Conversation Length", f"{stats['avg_conversation_length']:.1f} msgs")
-            m4.metric("User Word Count", f"{stats['total_user_words']:,}")
-
-            st.markdown("### 📈 Engagement Trends")
-            
-            # --- ROW 2: ACTIVITY OVER TIME ---
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                st.plotly_chart(activity_line_chart(df, theme=theme), use_container_width=True)
-            with c2:
-                st.plotly_chart(role_distribution_chart(df, theme=theme), use_container_width=True)
-
-            # --- ROW 3: HEATMAP & WORDCLOUD ---
-            st.markdown("### 🧬 Content Patterns")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                pivot = activity_heatmap_data(df)
-                st.plotly_chart(hourly_heatmap(pivot, theme=theme), use_container_width=True)
-            with col_b:
-                st.write("#### Most Frequent Terms")
-                fig_wc = generate_wordcloud(df, theme=theme)
-                st.pyplot(fig_wc)
-
-            # --- ROW 3.5: NEW FEATURE ---
-            st.markdown("### 📏 Message Analytics")
-            st.plotly_chart(message_length_distribution(df, theme=theme), use_container_width=True)
-
-            # --- ROW 4: NLP INSIGHTS ---
-            st.markdown("### 🧠 Advanced Insights")
-            col_x, col_y = st.columns(2)
-            
-            with col_x:
-                sent_fig = sentiment_trend_chart(df, theme=theme)
-                if sent_fig:
-                    st.plotly_chart(sent_fig, use_container_width=True)
-            
-            with col_y:
-                if clustering_on:
-                    st.write("#### Topic Clusters")
-                    clusters = cluster_topics(df)
-                    st.write(clusters.value_counts().rename_axis("Cluster").reset_index(name="Count"))
-                else:
-                    st.info("Enable 'Topic Clustering' in the settings expander to view conversation groupings.")
-
-            # --- SEARCH SECTION ---
-            st.divider()
-            st.subheader("🔍 Intelligence Search")
-            q = st.text_input("Search through your history...", placeholder="Type keywords here (e.g. 'Python', 'Travel', 'Recipe')")
-            if q:
-                search_results = df[df["content"].str.contains(q, case=False)]
-                st.success(f"Found {len(search_results)} matching messages.")
-                st.dataframe(search_results[["message_time", "conversation_title", "role", "content"]], use_container_width=True)
-
-            # --- EXPORT ---
-            st.divider()
-            st.download_button(
-                label="📥 Download Processed CSV",
-                data=df.to_csv(index=False).encode('utf-8'),
-                file_name='chatgpt_history_processed.csv',
-                mime='text/csv',
-                type="primary",
-            )
-else:
-    # Custom colored warning container
-    st.markdown(
-        """
-        <div style="background-color: rgba(255, 170, 0, 0.15); padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255, 170, 0, 0.3); margin-bottom: 1rem;">
-            ⚠️ Please upload a 'conversations.json' file using the uploader above to begin.
+with nav_col1:
+    st.markdown("""
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
+            <div style="background-color: #1E293B; border: 1px solid #334155; border-radius: 6px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem;">⚡</div>
+            <div>
+                <span style="font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em;">GPT Analytics</span>
+            </div>
         </div>
-        """,
-        unsafe_allow_html=True
+    """, unsafe_allow_html=True)
+
+with nav_col2:
+    page_options = ["🏠 Home & Upload", "📊 Analytics Dashboard"]
+    selected_page_idx = 0 if st.session_state.current_page == "Landing" else 1
+    chosen_page = st.radio(
+        "Navigation",
+        page_options,
+        index=selected_page_idx,
+        horizontal=True,
+        label_visibility="collapsed"
     )
-    st.divider()
-    st.info("Export your data from ChatGPT settings and upload 'conversations.json' here.")
+    st.session_state.current_page = "Landing" if "Home" in chosen_page else "Dashboard"
+
+with nav_col3:
+    theme = st.selectbox(
+        "Theme",
+        ["Dark", "Light"],
+        index=0 if st.session_state.theme == "Dark" else 1,
+        label_visibility="collapsed"
+    )
+    st.session_state.theme = theme
+
+# --- GLOBAL STYLES (RESPONSIVE, ZERO-GRADIENT, HIGH-CONTRAST LIGHT & DARK) ---
+if theme == "Dark":
+    st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            box-sizing: border-box;
+        }
+
+        [data-testid="stSidebar"], section[data-testid="stSidebar"], [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+
+        .stApp {
+            background-color: #0A0D14 !important;
+            color: #F8FAFC !important;
+        }
+
+        header[data-testid="stHeader"] {
+            background-color: transparent !important;
+        }
+
+        .stApp p, .stApp span, .stApp div, .stApp li, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+            color: #F8FAFC;
+        }
+
+        [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {
+            color: #E2E8F0 !important;
+        }
+
+        /* Metric Cards */
+        div[data-testid="metric-container"] {
+            background-color: #10141E !important;
+            border: 1px solid #1E2638 !important;
+            border-radius: 8px !important;
+            padding: 12px 14px !important;
+            box-shadow: none !important;
+        }
+        
+        div[data-testid="metric-container"] label {
+            color: #94A3B8 !important;
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+            color: #F8FAFC !important;
+            font-size: 1.45rem !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em;
+        }
+        div[data-testid="metric-container"] [data-testid="stMetricDelta"] {
+            color: #38BDF8 !important;
+            font-size: 0.8rem !important;
+        }
+
+        /* Hero & Surface Cards */
+        .landing-hero {
+            background-color: #10141E;
+            border: 1px solid #1E2638;
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            margin: 1.5rem 0 2rem 0;
+        }
+
+        .feature-card {
+            background-color: #10141E;
+            border: 1px solid #1E2638;
+            border-radius: 8px;
+            padding: 1.5rem;
+            height: 100%;
+        }
+
+        .hub-surface {
+            background-color: #10141E;
+            border: 1px solid #1E2638;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        /* High-Contrast File Uploader (Dark Mode) */
+        [data-testid="stFileUploader"] section {
+            background-color: #10141E !important;
+            border: 2px dashed #334155 !important;
+            border-radius: 8px !important;
+            padding: 1.5rem !important;
+        }
+        [data-testid="stFileUploader"] section:hover {
+            border-color: #38BDF8 !important;
+        }
+        [data-testid="stFileUploader"] button {
+            background-color: #0284C7 !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            font-weight: 600 !important;
+            border-radius: 6px !important;
+            padding: 0.45rem 1rem !important;
+        }
+        [data-testid="stFileUploader"] * {
+            color: #E2E8F0 !important;
+        }
+
+        /* Chat Messages */
+        .chat-bubble-user {
+            background-color: #141E2F !important;
+            border: 1px solid #1E3A5F !important;
+            border-left: 4px solid #38BDF8 !important;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            color: #F8FAFC !important;
+        }
+
+        .chat-bubble-ai {
+            background-color: #10141E !important;
+            border: 1px solid #1E2638 !important;
+            border-left: 4px solid #34D399 !important;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+            color: #F8FAFC !important;
+        }
+
+        /* Inputs & Selects */
+        [data-baseweb="input"], [data-baseweb="base-input"], input, textarea {
+            background-color: #10141E !important;
+            color: #F8FAFC !important;
+            border-color: #1E2638 !important;
+        }
+        div[data-baseweb="select"] > div {
+            background-color: #10141E !important;
+            border-color: #1E2638 !important;
+            color: #F8FAFC !important;
+        }
+
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 4px;
+            background-color: transparent;
+            border-bottom: 1px solid #1E2638;
+            padding-bottom: 4px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+        }
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 6px 6px 0 0;
+            padding: 8px 14px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: #94A3B8 !important;
+            border: none;
+            background-color: transparent;
+            white-space: nowrap;
+        }
+        .stTabs [aria-selected="true"] {
+            color: #F8FAFC !important;
+            background-color: #182234 !important;
+            font-weight: 600;
+        }
+
+        /* Buttons */
+        [data-testid="baseButton-primary"] {
+            background-color: #0284C7 !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            padding: 0.5rem 1.25rem !important;
+        }
+        [data-testid="baseButton-secondary"] {
+            background-color: #10141E !important;
+            color: #F8FAFC !important;
+            border: 1px solid #1E2638 !important;
+            border-radius: 6px !important;
+            font-weight: 500 !important;
+        }
+
+        /* Responsive Media Queries */
+        @media (max-width: 768px) {
+            .landing-hero {
+                padding: 1.75rem 1rem !important;
+            }
+            .landing-hero h1 {
+                font-size: 1.85rem !important;
+            }
+            div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+                font-size: 1.25rem !important;
+            }
+        }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            box-sizing: border-box;
+        }
+
+        [data-testid="stSidebar"], section[data-testid="stSidebar"], [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+
+        .stApp {
+            background-color: #F8FAFC !important;
+            color: #0F172A !important;
+        }
+
+        header[data-testid="stHeader"] {
+            background-color: transparent !important;
+        }
+
+        .stApp p, .stApp span, .stApp div, .stApp li, .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+            color: #0F172A;
+        }
+
+        [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] li {
+            color: #1E293B !important;
+        }
+
+        /* Metric Cards */
+        div[data-testid="metric-container"] {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-radius: 8px !important;
+            padding: 12px 14px !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+        }
+        
+        div[data-testid="metric-container"] label {
+            color: #64748B !important;
+            font-size: 0.75rem !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+            color: #0F172A !important;
+            font-size: 1.45rem !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em;
+        }
+        div[data-testid="metric-container"] [data-testid="stMetricDelta"] {
+            color: #0284C7 !important;
+            font-size: 0.8rem !important;
+        }
+
+        /* Hero & Surface Cards */
+        .landing-hero {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            margin: 1.5rem 0 2rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        }
+
+        .feature-card {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            height: 100%;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        .hub-surface {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        /* HIGH-CONTRAST FILE UPLOADER & BUTTON (LIGHT MODE) */
+        [data-testid="stFileUploader"] section {
+            background-color: #FFFFFF !important;
+            border: 2px dashed #94A3B8 !important;
+            border-radius: 8px !important;
+            padding: 1.5rem !important;
+        }
+        [data-testid="stFileUploader"] section:hover {
+            border-color: #0284C7 !important;
+            background-color: #F0F9FF !important;
+        }
+        [data-testid="stFileUploader"] button,
+        [data-testid="stFileUploader"] [data-testid="baseButton-secondary"] {
+            background-color: #0284C7 !important;
+            color: #FFFFFF !important;
+            border: 1px solid #0284C7 !important;
+            font-weight: 600 !important;
+            border-radius: 6px !important;
+            padding: 0.5rem 1.25rem !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+        }
+        [data-testid="stFileUploader"] button:hover {
+            background-color: #0369A1 !important;
+            border-color: #0369A1 !important;
+            color: #FFFFFF !important;
+        }
+        [data-testid="stFileUploader"] small,
+        [data-testid="stFileUploader"] span,
+        [data-testid="stFileUploader"] div {
+            color: #334155 !important;
+            font-weight: 500 !important;
+        }
+
+        /* Chat Messages */
+        .chat-bubble-user {
+            background-color: #F0F9FF !important;
+            border: 1px solid #BAE6FD !important;
+            border-left: 4px solid #0284C7 !important;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            color: #0F172A !important;
+        }
+
+        .chat-bubble-ai {
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-left: 4px solid #059669 !important;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+            color: #0F172A !important;
+        }
+
+        /* Inputs & Selects */
+        [data-baseweb="input"], [data-baseweb="base-input"], input, textarea {
+            background-color: #FFFFFF !important;
+            color: #0F172A !important;
+            border-color: #CBD5E1 !important;
+        }
+        div[data-baseweb="select"] > div {
+            background-color: #FFFFFF !important;
+            border-color: #CBD5E1 !important;
+            color: #0F172A !important;
+        }
+
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 4px;
+            background-color: transparent;
+            border-bottom: 1px solid #E2E8F0;
+            padding-bottom: 4px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+        }
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 6px 6px 0 0;
+            padding: 8px 14px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: #64748B !important;
+            border: none;
+            background-color: transparent;
+            white-space: nowrap;
+        }
+        .stTabs [aria-selected="true"] {
+            color: #0F172A !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid #E2E8F0 !important;
+            border-bottom: 1px solid #FFFFFF !important;
+            font-weight: 600;
+        }
+
+        /* Buttons */
+        [data-testid="baseButton-primary"] {
+            background-color: #0284C7 !important;
+            color: #FFFFFF !important;
+            border: none !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            padding: 0.5rem 1.25rem !important;
+        }
+        [data-testid="baseButton-secondary"] {
+            background-color: #FFFFFF !important;
+            color: #0F172A !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 6px !important;
+            font-weight: 500 !important;
+        }
+
+        /* Responsive Media Queries */
+        @media (max-width: 768px) {
+            .landing-hero {
+                padding: 1.75rem 1rem !important;
+            }
+            .landing-hero h1 {
+                font-size: 1.85rem !important;
+            }
+            div[data-testid="metric-container"] [data-testid="stMetricValue"] {
+                font-size: 1.25rem !important;
+            }
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- DATA PROCESSING FUNCTION ---
+@st.cache_data(show_spinner=False)
+def load_and_enrich_data(file_obj, is_demo=False):
+    if is_demo:
+        raw_df = generate_sample_chat_data()
+    else:
+        raw_df = load_chatgpt_export(file_obj)
+    
+    if raw_df.empty:
+        return raw_df
+        
+    enriched_df = add_sentiment_to_df(raw_df)
+    return enriched_df
+
+# ==============================================================================
+# VIEW 1: CLEAN RESPONSIVE LANDING PAGE
+# ==============================================================================
+if st.session_state.current_page == "Landing":
+    
+    # Hero Section
+    st.markdown("""
+        <div class="landing-hero">
+            <span style="background-color: rgba(2, 132, 199, 0.12); color: #0284C7; font-weight: 600; font-size: 0.8rem; padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(2, 132, 199, 0.25);">
+                Intelligence for your ChatGPT History
+            </span>
+            <h1 style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em; margin: 1.2rem 0 0.8rem 0; line-height: 1.2;">
+                Understand Your AI Habits & Conversation Patterns
+            </h1>
+            <p style="font-size: 1.05rem; color: #64748B; max-width: 680px; margin: 0 auto 1.5rem auto; line-height: 1.6;">
+                Transform your raw ChatGPT export into interactive analytics. Discover usage streaks, peak productivity windows, NLP topic clusters, and token usage with privacy-first local processing.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Hero Action Grid
+    cta_col1, cta_col2 = st.columns(2)
+    with cta_col1:
+        st.markdown("""
+            <div class="hub-surface" style="text-align: center; padding: 1.75rem 1.25rem;">
+                <div style="font-size: 2rem; margin-bottom: 6px;">⚡</div>
+                <h3 style="margin: 0 0 6px 0; font-size: 1.15rem; font-weight: 700;">Explore with Demo Data</h3>
+                <p style="font-size: 0.88rem; color: #64748B; margin-bottom: 1.25rem;">
+                    Instantly load mock conversation history to test all interactive charts, heatmaps, and sentiment tools.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("🚀 Launch Live Demo", use_container_width=True, type="primary"):
+            st.session_state.data_mode = "Demo Dataset"
+            st.session_state.current_page = "Dashboard"
+            st.rerun()
+
+    with cta_col2:
+        st.markdown("""
+            <div class="hub-surface" style="text-align: center; padding: 1.75rem 1.25rem;">
+                <div style="font-size: 2rem; margin-bottom: 6px;">📁</div>
+                <h3 style="margin: 0 0 6px 0; font-size: 1.15rem; font-weight: 700;">Upload conversations.json</h3>
+                <p style="font-size: 0.88rem; color: #64748B; margin-bottom: 0.8rem;">
+                    Load your personal ChatGPT export file. Processed 100% locally on your machine.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        uploaded_landing_file = st.file_uploader(
+            "Upload JSON",
+            type=["json"],
+            label_visibility="collapsed",
+            help="Extract from ChatGPT export ZIP -> conversations.json"
+        )
+        if uploaded_landing_file is not None:
+            st.session_state.uploaded_file_data = uploaded_landing_file
+            st.session_state.data_mode = "Upload Export (.json)"
+            st.session_state.current_page = "Dashboard"
+            st.rerun()
+
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+
+    # Feature Grid
+    st.markdown("<h3 style='text-align: center; font-size: 1.35rem; font-weight: 700; margin-bottom: 1.25rem;'>Everything You Need To Know</h3>", unsafe_allow_html=True)
+    f1, f2, f3 = st.columns(3)
+    
+    with f1:
+        st.markdown("""
+            <div class="feature-card">
+                <div style="font-size: 1.5rem; margin-bottom: 8px;">⏰</div>
+                <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0 0 6px 0;">Habit & Streak Matrices</h4>
+                <p style="font-size: 0.88rem; color: #64748B; line-height: 1.5; margin: 0;">
+                    Visualize when you brainstorm most with Day-of-Week vs Hour heatmaps, daily volume trends, and consecutive active streaks.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with f2:
+        st.markdown("""
+            <div class="feature-card">
+                <div style="font-size: 1.5rem; margin-bottom: 8px;">🧠</div>
+                <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0 0 6px 0;">NLP & Topic Discovery</h4>
+                <p style="font-size: 0.88rem; color: #64748B; line-height: 1.5; margin: 0;">
+                    Automatic K-Means conversation clustering with theme keyword tags, frequent phrase rankings, and sentiment scoring.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with f3:
+        st.markdown("""
+            <div class="feature-card">
+                <div style="font-size: 1.5rem; margin-bottom: 8px;">💬</div>
+                <h4 style="font-size: 1.05rem; font-weight: 700; margin: 0 0 6px 0;">Deep Reader & Search</h4>
+                <p style="font-size: 0.88rem; color: #64748B; line-height: 1.5; margin: 0;">
+                    Instant keyword search across your entire archive with an interactive conversation viewer and token/effort estimation.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # 3-Step Export Guide
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+    st.markdown("""
+        <div class="hub-surface">
+            <h4 style="margin: 0 0 12px 0; font-size: 1.1rem; font-weight: 700;">📖 How to Export Your Data from ChatGPT</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.88rem; color: #64748B; line-height: 1.6;">
+                <div>
+                    <b style="color: inherit;">1. Request Export</b><br>
+                    Go to <a href="https://chatgpt.com" target="_blank" style="color: #0284C7; text-decoration: none;">chatgpt.com</a> &rarr; Settings &rarr; Data Controls &rarr; Export Data.
+                </div>
+                <div>
+                    <b style="color: inherit;">2. Download ZIP</b><br>
+                    Open the confirmation email sent by OpenAI and download your archive file.
+                </div>
+                <div>
+                    <b style="color: inherit;">3. Drop conversations.json</b><br>
+                    Extract the ZIP, upload <code>conversations.json</code> above, and explore your personal dashboard.
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+
+# ==============================================================================
+# VIEW 2: ANALYTICS DASHBOARD
+# ==============================================================================
+else:
+    # Resolve dataset
+    if st.session_state.data_mode == "Demo Dataset":
+        df = load_and_enrich_data(None, is_demo=True)
+    elif st.session_state.uploaded_file_data is not None:
+        df = load_and_enrich_data(st.session_state.uploaded_file_data, is_demo=False)
+    else:
+        df = load_and_enrich_data(None, is_demo=True)
+
+    if df.empty:
+        st.warning("No data found. Switch to Demo mode or upload a valid JSON file.")
+        if st.button("Load Demo Data", type="primary"):
+            st.session_state.data_mode = "Demo Dataset"
+            st.rerun()
+        st.stop()
+
+    # --- TOP TOOLBAR FILTERS (RESPONSIVE INLINE) ---
+    min_date = df["message_time"].min().date()
+    max_date = df["message_time"].max().date()
+
+    f_col1, f_col2, f_col3, f_col4 = st.columns([1.5, 1.2, 1, 0.8])
+    with f_col1:
+        date_range = st.date_input(
+            "Date Range",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            label_visibility="collapsed"
+        )
+    with f_col2:
+        role_filter = st.multiselect(
+            "Roles",
+            options=df["role"].unique().tolist(),
+            default=df["role"].unique().tolist(),
+            label_visibility="collapsed",
+            placeholder="Filter Roles"
+        )
+    with f_col3:
+        freq_option = st.selectbox(
+            "Aggregation Interval",
+            ["Daily", "Weekly", "Monthly"],
+            index=0,
+            label_visibility="collapsed"
+        )
+        freq_map = {"Daily": "D", "Weekly": "W-MON", "Monthly": "ME"}
+    with f_col4:
+        only_code = st.checkbox("Code Only", value=False)
+
+    # Filter dataframe
+    filtered_df = df.copy()
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_d, end_d = date_range
+        filtered_df = filtered_df[
+            (filtered_df["message_time"].dt.date >= start_d) & 
+            (filtered_df["message_time"].dt.date <= end_d)
+        ]
+        
+    if role_filter:
+        filtered_df = filtered_df[filtered_df["role"].isin(role_filter)]
+        
+    if only_code:
+        filtered_df = filtered_df[filtered_df["has_code"] == True]
+
+    if filtered_df.empty:
+        st.warning("No messages match the filter selection.")
+        st.stop()
+
+    stats = compute_basic_stats(filtered_df)
+
+    # --- KPI METRICS BAR ---
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric("Conversations", f"{stats['total_conversations']:,}")
+    k2.metric("Total Messages", f"{stats['total_messages']:,}")
+    k3.metric("Total Words", f"{stats['total_words']:,}")
+    k4.metric("Est. Tokens", f"{stats['total_tokens']:,}")
+    k5.metric("Avg Thread", f"{stats['avg_conversation_length']} msgs")
+    k6.metric("Active Streak", f"{stats['current_streak']} days", delta=f"Max {stats['max_streak']}d")
+
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+    # --- MODULAR TABS ---
+    t_overview, t_habits, t_nlp, t_chat, t_tokens, t_export = st.tabs([
+        "📊 Overview",
+        "⏰ Habits & Timing",
+        "🧠 NLP & Topics",
+        "💬 Conversation Explorer",
+        "⚡ Tokens & Effort",
+        "📥 Export"
+    ])
+
+    # -------------------------------------------------------------
+    # TAB 1: OVERVIEW
+    # -------------------------------------------------------------
+    with t_overview:
+        c_trend, c_dist = st.columns([2.2, 1])
+        with c_trend:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Activity Over Time</p>", unsafe_allow_html=True)
+            timeline_data = get_activity_over_time(filtered_df, freq=freq_map[freq_option])
+            st.plotly_chart(activity_timeline_chart(timeline_data, theme=theme), use_container_width=True)
+        with c_dist:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Role Proportion</p>", unsafe_allow_html=True)
+            st.plotly_chart(role_distribution_chart(filtered_df, theme=theme), use_container_width=True)
+
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        c_len, c_top = st.columns([1.2, 1.8])
+        with c_len:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Message Length Distribution</p>", unsafe_allow_html=True)
+            st.plotly_chart(message_length_distribution(filtered_df, theme=theme), use_container_width=True)
+        with c_top:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>🏆 Top Active Conversations</p>", unsafe_allow_html=True)
+            leaderboard = get_conversation_leaderboard(filtered_df, top_n=6, sort_by="messages")
+            if not leaderboard.empty:
+                st.dataframe(
+                    leaderboard[["title", "messages", "total_words", "start_time"]].rename(
+                        columns={"title": "Conversation Title", "messages": "Messages", "total_words": "Words", "start_time": "Started"}
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+    # -------------------------------------------------------------
+    # TAB 2: HABITS & TIMING
+    # -------------------------------------------------------------
+    with t_habits:
+        st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Interaction Heatmap (Day of Week vs. Hour)</p>", unsafe_allow_html=True)
+        heat_data = activity_heatmap_data(filtered_df)
+        st.plotly_chart(hourly_heatmap(heat_data, theme=theme), use_container_width=True)
+
+        col_hb1, col_hb2 = st.columns([1.5, 1])
+        with col_hb1:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Volume by Weekday</p>", unsafe_allow_html=True)
+            weekday_df = get_weekday_activity(filtered_df)
+            st.plotly_chart(weekday_bar_chart(weekday_df, theme=theme), use_container_width=True)
+        with col_hb2:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Productivity Highlights</p>", unsafe_allow_html=True)
+            hourly_df = get_hourly_activity(filtered_df)
+            peak_row = hourly_df.loc[hourly_df["count"].idxmax()] if not hourly_df.empty else None
+            peak_str = f"{int(peak_row['hour']):02d}:00 - {int(peak_row['hour'])+1:02d}:00" if peak_row is not None else "N/A"
+            
+            st.markdown(f"""
+            <div class="hub-surface">
+                <p style="margin: 0 0 6px 0; font-size: 0.78rem; font-weight: 600; color: #64748B; letter-spacing: 0.04em;">PEAK INTERACTION WINDOW</p>
+                <p style="font-size: 1.45rem; font-weight: 700; margin: 0 0 12px 0;">{peak_str}</p>
+                <div style="border-top: 1px solid rgba(128,128,128,0.15); padding-top: 10px; font-size: 0.88rem; line-height: 1.9;">
+                    <div>• <b>Total Active Days:</b> {stats['active_days']} days</div>
+                    <div>• <b>Longest Consecutive Streak:</b> {stats['max_streak']} days</div>
+                    <div>• <b>Current Streak:</b> {stats['current_streak']} days</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # -------------------------------------------------------------
+    # TAB 3: NLP & TOPICS
+    # -------------------------------------------------------------
+    with t_nlp:
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Frequent User Concepts</p>", unsafe_allow_html=True)
+            ngrams = extract_top_ngrams(filtered_df, ngram_range=(1, 1), top_n=10, role="user")
+            st.plotly_chart(top_ngrams_bar_chart(ngrams, theme=theme), use_container_width=True)
+        with col_t2:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>🎯 Topic Clusters (K-Means)</p>", unsafe_allow_html=True)
+            clusters_df = cluster_topics_with_labels(filtered_df, n_clusters=4)
+            if not clusters_df.empty and "cluster_name" in clusters_df.columns:
+                c_summary = clusters_df.groupby("cluster_name").size().reset_index(name="Threads").sort_values("Threads", ascending=False)
+                st.dataframe(c_summary.rename(columns={"cluster_name": "Cluster Keywords"}), use_container_width=True, hide_index=True)
+            else:
+                st.info("Insufficient data for clustering.")
+
+        st.divider()
+        col_s1, col_s2, col_s3 = st.columns([1, 1.2, 1])
+        with col_s1:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>User Sentiment Breakdown</p>", unsafe_allow_html=True)
+            st.plotly_chart(sentiment_breakdown_chart(filtered_df, theme=theme), use_container_width=True)
+        with col_s2:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Sentiment Trend</p>", unsafe_allow_html=True)
+            sent_plot = sentiment_trend_chart(filtered_df, theme=theme)
+            if sent_plot:
+                st.plotly_chart(sent_plot, use_container_width=True)
+            else:
+                st.info("Sentiment trend unavailable for selected range.")
+        with col_s3:
+            st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Detected Languages & Code</p>", unsafe_allow_html=True)
+            lang_df = detect_code_languages(filtered_df)
+            st.plotly_chart(code_languages_chart(lang_df, theme=theme), use_container_width=True)
+
+    # -------------------------------------------------------------
+    # TAB 4: CONVERSATION EXPLORER
+    # -------------------------------------------------------------
+    with t_chat:
+        st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Search & Thread Inspector</p>", unsafe_allow_html=True)
+        search_kw = st.text_input(
+            "Search keywords",
+            placeholder="Type search terms (e.g. 'Postgres', 'FastAPI', 'Itinerary')...",
+            label_visibility="collapsed"
+        )
+
+        col_nav, col_body = st.columns([1.1, 2])
+        
+        all_convs = filtered_df[["conversation_id", "conversation_title"]].drop_duplicates()
+        if search_kw.strip():
+            matched_ids = filtered_df[filtered_df["content"].str.contains(search_kw, case=False, na=False)]["conversation_id"].unique()
+            all_convs = all_convs[all_convs["conversation_id"].isin(matched_ids)]
+
+        with col_nav:
+            st.markdown(f"**Threads ({len(all_convs)})**")
+            if not all_convs.empty:
+                selected_cid = st.selectbox(
+                    "Select thread",
+                    options=all_convs["conversation_id"].tolist(),
+                    format_func=lambda cid: all_convs.loc[all_convs["conversation_id"] == cid, "conversation_title"].iloc[0],
+                    label_visibility="collapsed"
+                )
+            else:
+                st.warning("No conversations match your search.")
+                selected_cid = None
+
+        with col_body:
+            if selected_cid:
+                thread_msgs = filtered_df[filtered_df["conversation_id"] == selected_cid].sort_values("message_time")
+                header_msg = thread_msgs.iloc[0]
+                
+                st.markdown(f"#### {header_msg['conversation_title']}")
+                st.caption(f"Started {header_msg['message_time'].strftime('%b %d, %Y at %H:%M')} • {len(thread_msgs)} messages")
+                
+                box = st.container(height=480)
+                with box:
+                    for _, msg_row in thread_msgs.iterrows():
+                        is_user = msg_row["role"] == "user"
+                        sender_tag = "👤 You" if is_user else "🤖 Assistant"
+                        box_class = "chat-bubble-user" if is_user else "chat-bubble-ai"
+                        t_str = msg_row["message_time"].strftime("%H:%M") if pd.notna(msg_row["message_time"]) else ""
+                        
+                        st.markdown(f"""
+                        <div class="{box_class}">
+                            <div style="font-size: 0.8rem; font-weight: 600; color: {'#0284C7' if is_user else '#059669'}; margin-bottom: 4px;">
+                                {sender_tag} <span style="color: #64748B; font-weight: normal; font-size: 0.75rem; float: right;">{t_str}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.markdown(msg_row["content"])
+                        st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
+
+    # -------------------------------------------------------------
+    # TAB 5: TOKENS & EFFORT
+    # -------------------------------------------------------------
+    with t_tokens:
+        t_estimates = get_token_cost_estimation(filtered_df)
+        if t_estimates:
+            c_tk1, c_tk2, c_tk3, c_tk4 = st.columns(4)
+            c_tk1.metric("Input Tokens (Prompt)", f"{t_estimates['input_tokens']:,}")
+            c_tk2.metric("Output Tokens (AI)", f"{t_estimates['output_tokens']:,}")
+            c_tk3.metric("Est. Cost (GPT-4o)", f"${t_estimates['gpt4o_cost']:.2f}")
+            c_tk4.metric("Est. Cost (GPT-4o-mini)", f"${t_estimates['mini_cost']:.2f}")
+
+            st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+            col_hr1, col_hr2 = st.columns(2)
+            with col_hr1:
+                st.markdown(f"""
+                <div class="hub-surface">
+                    <p style="margin: 0 0 6px 0; font-size: 0.78rem; font-weight: 600; color: #64748B; letter-spacing: 0.04em;">HUMAN EFFORT INVESTED</p>
+                    <p style="font-size: 1.8rem; font-weight: 700; color: #0284C7; margin: 0 0 10px 0;">
+                        {t_estimates['typing_hours']} <span style="font-size: 0.95rem; font-weight: 500; color: inherit;">hours typing</span>
+                    </p>
+                    <p style="font-size: 0.88rem; line-height: 1.5; color: inherit; margin: 0;">
+                        Estimated typing time based on ~40 WPM. You wrote <b>{stats['total_user_words']:,} words</b> and asked <b>{stats['total_questions']:,} questions</b>.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_hr2:
+                st.markdown(f"""
+                <div class="hub-surface">
+                    <p style="margin: 0 0 6px 0; font-size: 0.78rem; font-weight: 600; color: #64748B; letter-spacing: 0.04em;">ASSISTANT READING TIME</p>
+                    <p style="font-size: 1.8rem; font-weight: 700; color: #059669; margin: 0 0 10px 0;">
+                        {t_estimates['reading_hours']} <span style="font-size: 0.95rem; font-weight: 500; color: inherit;">hours reading</span>
+                    </p>
+                    <p style="font-size: 0.88rem; line-height: 1.5; color: inherit; margin: 0;">
+                        Estimated human reading time based on ~250 WPM. Assistant provided <b>{stats['total_assistant_words']:,} words</b> across all conversations.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # -------------------------------------------------------------
+    # TAB 6: EXPORT
+    # -------------------------------------------------------------
+    with t_export:
+        st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 8px;'>Export Structured History</p>", unsafe_allow_html=True)
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            csv_payload = filtered_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Structured CSV",
+                data=csv_payload,
+                file_name=f"chatgpt_analytics_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                type="primary",
+                use_container_width=True
+            )
+        with col_dl2:
+            summary_str = f"""ChatGPT Intelligence Hub Summary Report
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+--------------------------------------------------
+Total Conversations: {stats['total_conversations']}
+Total Messages: {stats['total_messages']}
+User Messages: {stats['user_messages']}
+Assistant Messages: {stats['assistant_messages']}
+Total Words: {stats['total_words']}
+Estimated Tokens: {stats['total_tokens']}
+Longest Streak: {stats['max_streak']} days
+Active Days: {stats['active_days']}
+Estimated Cost (GPT-4o equivalent): ${t_estimates.get('gpt4o_cost', 0):.2f}
+"""
+            st.download_button(
+                label="📄 Download Summary Report (TXT)",
+                data=summary_str,
+                file_name=f"chatgpt_summary_{datetime.now().strftime('%Y%m%d')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+        st.markdown("<p style='font-weight: 600; font-size: 0.95rem; margin-bottom: 4px;'>Raw Data Table</p>", unsafe_allow_html=True)
+        st.dataframe(
+            filtered_df[["message_time", "conversation_title", "role", "word_count", "estimated_tokens", "sentiment_category", "content"]],
+            use_container_width=True,
+            height=300
+        )
 
 # --- FOOTER ---
-st.markdown(
-    """
-    <div style="text-align: center; margin-top: 50px; padding-bottom: 20px; color: #888; font-size: 0.9rem;">
-        Developed by Bonsa
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div style="text-align: center; margin-top: 3.5rem; padding-bottom: 1.5rem; color: #64748B; font-size: 0.8rem; border-top: 1px solid rgba(128,128,128,0.1); padding-top: 1rem;">
+    GPT Analytics • Clean Modern Intelligence
+</div>
+""", unsafe_allow_html=True)
