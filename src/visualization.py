@@ -19,16 +19,16 @@ THEME_CONFIG = {
     },
     "Light": {
         "text": "#0F172A",
-        "subtext": "#64748B",
+        "subtext": "#334155",
         "card_bg": "#FFFFFF",
-        "border": "#E2E8F0",
-        "grid": "#F1F5F9",
+        "border": "#CBD5E1",
+        "grid": "#E2E8F0",
         "primary": "#0284C7",      # Sky 600
         "secondary": "#059669",    # Emerald 600
         "accent": "#4F46E5",       # Indigo 600
         "warning": "#D97706",      # Amber 600
         "danger": "#DC2626",       # Red 600
-        "neutral": "#94A3B8",
+        "neutral": "#64748B",
         "bar_sequence": ["#0284C7", "#059669", "#4F46E5", "#D97706", "#DB2777", "#7C3AED"]
     }
 }
