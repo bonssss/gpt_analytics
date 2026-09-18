@@ -264,21 +264,86 @@ if current_theme == "Dark":
             color: #F8FAFC !important;
         }
 
-        /* Inputs & Selects (Dark Mode) */
-        [data-baseweb="input"], [data-baseweb="base-input"], input, textarea {
+        /* Inputs, Datepickers & Selects (Dark Mode) */
+        [data-testid="stDateInput"],
+        [data-testid="stTextInput"],
+        [data-testid="stSelectbox"],
+        [data-testid="stMultiSelect"],
+        [data-baseweb="input"],
+        [data-baseweb="base-input"],
+        [data-baseweb="input"] *,
+        [data-baseweb="base-input"] *,
+        [data-testid="stDateInput"] input,
+        [data-testid="stTextInput"] input,
+        [data-testid="stDateInput"] div,
+        [data-testid="stTextInput"] div,
+        [data-baseweb="select"],
+        [data-baseweb="select"] *,
+        [data-baseweb="popover"],
+        [data-baseweb="popover"] *,
+        ul[role="listbox"],
+        li[role="option"],
+        input,
+        textarea {
             background-color: #10141E !important;
             color: #F8FAFC !important;
+            -webkit-text-fill-color: #F8FAFC !important;
             border-color: #1E2638 !important;
+            font-weight: 500 !important;
         }
-        div[data-baseweb="select"] > div {
-            background-color: #10141E !important;
-            border-color: #1E2638 !important;
-            color: #F8FAFC !important;
-        }
-        div[data-baseweb="tag"] {
+
+        /* Multiselect Tags (Dark Mode) */
+        div[data-baseweb="tag"],
+        span[data-baseweb="tag"],
+        div[data-baseweb="tag"] *,
+        span[data-baseweb="tag"] * {
             background-color: #1E3A5F !important;
             color: #38BDF8 !important;
-            border: 1px solid #0284C7 !important;
+            -webkit-text-fill-color: #38BDF8 !important;
+            border-color: #0284C7 !important;
+            font-weight: 600 !important;
+        }
+
+        /* SVG Icons in inputs (Dark Mode) */
+        [data-baseweb="select"] svg,
+        [data-testid="stDateInput"] svg,
+        [data-testid="stSelectbox"] svg,
+        [data-testid="stMultiSelect"] svg,
+        svg[data-icon="calendar"] {
+            fill: #94A3B8 !important;
+            color: #94A3B8 !important;
+        }
+
+        /* Checkbox (Dark Mode) */
+        [data-testid="stCheckbox"] label span,
+        [data-testid="stCheckbox"] p {
+            color: #F8FAFC !important;
+            font-weight: 500 !important;
+        }
+
+        /* Chat Explorer (Dark Mode) */
+        .chat-bubble-user {
+            background-color: #141E2F !important;
+            border: 1px solid #1E3A5F !important;
+            border-left: 4px solid #38BDF8 !important;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            color: #F8FAFC !important;
+        }
+        .chat-bubble-ai {
+            background-color: #10141E !important;
+            border: 1px solid #1E2638 !important;
+            border-left: 4px solid #34D399 !important;
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            color: #F8FAFC !important;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] p,
+        [data-testid="stVerticalBlockBorderWrapper"] li,
+        [data-testid="stVerticalBlockBorderWrapper"] code {
+            color: #F8FAFC !important;
         }
 
         /* Tabs (Dark Mode) */
@@ -292,26 +357,37 @@ if current_theme == "Dark":
             flex-wrap: nowrap;
         }
         .stTabs [data-baseweb="tab"] {
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 0.9rem;
-            font-weight: 600;
+            border-radius: 6px !important;
+            padding: 8px 16px !important;
+            font-size: 0.9rem !important;
+            font-weight: 600 !important;
             color: #94A3B8 !important;
             border: 1px solid #1E2638 !important;
             background-color: #10141E !important;
-            white-space: nowrap;
+            white-space: nowrap !important;
         }
         .stTabs [data-baseweb="tab"] * {
             color: #94A3B8 !important;
+            font-weight: 600 !important;
+        }
+        .stTabs [data-baseweb="tab"]:hover {
+            color: #38BDF8 !important;
+            border-color: #0284C7 !important;
+            background-color: #141E2F !important;
+        }
+        .stTabs [data-baseweb="tab"]:hover * {
+            color: #38BDF8 !important;
         }
         .stTabs [aria-selected="true"] {
             color: #FFFFFF !important;
             background-color: #0284C7 !important;
             border: 1px solid #0284C7 !important;
             font-weight: 700 !important;
+            box-shadow: 0 1px 3px rgba(2, 132, 199, 0.4) !important;
         }
         .stTabs [aria-selected="true"] * {
             color: #FFFFFF !important;
+            font-weight: 700 !important;
         }
 
         /* Buttons (Dark Mode) */
@@ -332,6 +408,14 @@ if current_theme == "Dark":
         }
         [data-testid="baseButton-secondary"] *, [data-testid="stBaseButton-secondary"] *, button[kind="secondary"] * {
             color: #F8FAFC !important;
+        }
+        [data-testid="baseButton-secondary"]:hover, [data-testid="stBaseButton-secondary"]:hover, button[kind="secondary"]:hover {
+            background-color: #141E2F !important;
+            border-color: #0284C7 !important;
+            color: #38BDF8 !important;
+        }
+        [data-testid="baseButton-secondary"]:hover *, [data-testid="stBaseButton-secondary"]:hover *, button[kind="secondary"]:hover * {
+            color: #38BDF8 !important;
         }
 
         /* Responsive Media Queries */
@@ -555,7 +639,7 @@ else:
             border-left: 4px solid #0284C7 !important;
             padding: 12px 16px;
             border-radius: 6px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             color: #0F172A !important;
         }
 
@@ -565,21 +649,36 @@ else:
             border-left: 4px solid #059669 !important;
             padding: 12px 16px;
             border-radius: 6px;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
+            color: #0F172A !important;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] p,
+        [data-testid="stVerticalBlockBorderWrapper"] li,
+        [data-testid="stVerticalBlockBorderWrapper"] code {
             color: #0F172A !important;
         }
 
         /* COMPLETE INPUTS, DATEPICKER & MULTISELECT OVERRIDES (LIGHT MODE) */
+        [data-testid="stDateInput"],
+        [data-testid="stTextInput"],
+        [data-testid="stSelectbox"],
+        [data-testid="stMultiSelect"],
         [data-baseweb="input"],
         [data-baseweb="base-input"],
+        [data-baseweb="input"] *,
+        [data-baseweb="base-input"] *,
         [data-testid="stDateInput"] input,
         [data-testid="stTextInput"] input,
-        [data-testid="stDateInput"] div[data-baseweb="input"],
-        [data-testid="stDateInput"] div[data-baseweb="base-input"],
-        div[data-baseweb="input"],
-        div[data-baseweb="base-input"],
-        div[data-baseweb="input"] > div,
-        input, textarea {
+        [data-testid="stDateInput"] div,
+        [data-testid="stTextInput"] div,
+        [data-baseweb="select"],
+        [data-baseweb="select"] *,
+        [data-baseweb="popover"],
+        [data-baseweb="popover"] *,
+        ul[role="listbox"],
+        li[role="option"],
+        input,
+        textarea {
             background-color: #FFFFFF !important;
             color: #0F172A !important;
             -webkit-text-fill-color: #0F172A !important;
@@ -587,36 +686,17 @@ else:
             font-weight: 600 !important;
         }
 
-        /* MultiSelect & Selectbox Container */
-        [data-testid="stMultiSelect"] div[data-baseweb="select"],
-        [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
-        [data-testid="stSelectbox"] div[data-baseweb="select"],
-        [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-        div[data-baseweb="select"],
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="popover"],
-        div[data-baseweb="popover"] > div,
-        ul[role="listbox"],
-        li[role="option"] {
-            background-color: #FFFFFF !important;
-            color: #0F172A !important;
-            border: 1px solid #CBD5E1 !important;
-            font-weight: 500 !important;
-        }
-
         /* MultiSelect Tags / Chips (High-Contrast Sky Blue Pills) */
         div[data-baseweb="tag"],
-        span[data-baseweb="tag"] {
+        span[data-baseweb="tag"],
+        div[data-baseweb="tag"] *,
+        span[data-baseweb="tag"] * {
             background-color: #0284C7 !important;
-            border: 1px solid #0284C7 !important;
-            color: #FFFFFF !important;
-            border-radius: 4px !important;
-            padding: 2px 6px !important;
-        }
-        div[data-baseweb="tag"] span,
-        span[data-baseweb="tag"] span {
+            border-color: #0284C7 !important;
             color: #FFFFFF !important;
             -webkit-text-fill-color: #FFFFFF !important;
+            border-radius: 4px !important;
+            padding: 2px 6px !important;
             font-weight: 600 !important;
         }
         div[data-baseweb="tag"] svg,
