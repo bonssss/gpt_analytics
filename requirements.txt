@@ -1,5 +1,5 @@
-streamlit==1.35.0
-altair==5.3.0
+streamlit>=1.35.0
+altair>=5.3.0
 
 pandas
 numpy
@@ -10,3 +10,4 @@ scikit-learn
 wordcloud
 textblob
 nltk
+

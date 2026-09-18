@@ -20,7 +20,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import nltk
 @st.cache_resource(show_spinner=False)
 def setup_nlp_resources():
-    for pkg in ['punkt', 'brown', 'wordnet', 'averaged_perceptron_tagger']:
+    for pkg in ['punkt', 'punkt_tab', 'brown', 'wordnet', 'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng']:
         try:
             nltk.download(pkg, quiet=True)
         except Exception:
